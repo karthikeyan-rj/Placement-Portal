@@ -1,0 +1,42 @@
+# Environment / Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Spring Boot / Maven
+backend/target/
+*.jar.original
+
+# Node
+node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temp files
+*.tmp
+*.temp
+*.swp
+
+# Runtime uploads
+uploads/
+
+# Package lock files (optional - remove if you want to commit)
+# frontend/package-lock.json
