@@ -18,13 +18,16 @@ import com.college.placement.student.StudentProfile;
 import com.college.placement.student.StudentProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -48,7 +51,18 @@ public class PlacementDriveService {
         } else {
             drives = driveRepository.findAllByOrderByDriveDateDesc(pageable);
         }
-        return drives.map(this::toResponse);
+        List<PlacementDrive> content = drives.getContent();
+        Map<Long, EligibilityCriteria> criteriaByDrive = new LinkedHashMap<>();
+        if (!content.isEmpty()) {
+            List<Long> ids = content.stream().map(PlacementDrive::getId).toList();
+            for (EligibilityCriteria c : eligibilityRepository.findAllByPlacementDriveIdIn(ids)) {
+                criteriaByDrive.put(c.getPlacementDrive().getId(), c);
+            }
+        }
+        List<PlacementDriveResponse> responses = content.stream()
+                .map(d -> toResponse(d, criteriaByDrive.get(d.getId())))
+                .toList();
+        return new PageImpl<>(responses, pageable, drives.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -162,8 +176,12 @@ public class PlacementDriveService {
     }
 
     private PlacementDriveResponse toResponse(PlacementDrive drive) {
-        EligibilityCriteriaResponse eligResponse = null;
         EligibilityCriteria criteria = eligibilityRepository.findByPlacementDriveId(drive.getId()).orElse(null);
+        return toResponse(drive, criteria);
+    }
+
+    private PlacementDriveResponse toResponse(PlacementDrive drive, EligibilityCriteria criteria) {
+        EligibilityCriteriaResponse eligResponse = null;
         if (criteria != null) {
             eligResponse = EligibilityCriteriaResponse.builder()
                     .id(criteria.getId())

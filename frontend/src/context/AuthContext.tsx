@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { User, LoginResponse } from '../types';
 import api from '../api/axios';
+import { cacheClear } from '../api/cache';
 
 interface AuthContextType {
   user: User | null;
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(userData));
     setToken(data.token);
     setUser(userData);
+    cacheClear();
   };
 
   const logout = () => {
@@ -58,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
+    cacheClear();
   };
 
   return (

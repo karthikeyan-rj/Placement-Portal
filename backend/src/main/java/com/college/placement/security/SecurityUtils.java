@@ -21,6 +21,10 @@ public class SecurityUtils {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new UnauthorizedException("Not authenticated");
         }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof AppUserPrincipal appUserPrincipal) {
+            return appUserPrincipal.getUser();
+        }
         String email = authentication.getName();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));

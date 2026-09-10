@@ -83,6 +83,7 @@ public class UserController {
 
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<Map<String, Long>>> getStats() {
+        securityUtils.requireRole(Role.PO);
         Map<String, Long> stats = Map.of(
                 "totalStudents", userService.countByRole(Role.STUDENT),
                 "totalPCs", userService.countByRole(Role.PC),

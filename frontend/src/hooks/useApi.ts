@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api, { getErrorMessage } from '../api/axios';
+import { cacheGet, cacheSet } from '../api/cache';
 import type { ApiResponse, PaginatedResponse } from '../types';
 
 interface UseApiOptions {
   params?: Record<string, unknown>;
   immediate?: boolean;
+  /** Cache the GET result in memory for this many ms (role/user-scoped). Default: no caching. */
+  cacheTtl?: number;
 }
 
 interface UseApiReturn<T> {
@@ -22,7 +25,7 @@ export function useApi<T>(
   url: string,
   options: UseApiOptions = {}
 ): UseApiReturn<T> {
-  const { params = {}, immediate = true } = options;
+  const { params = {}, immediate = true, cacheTtl } = options;
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(immediate);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +36,10 @@ export function useApi<T>(
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
-  const stableParams = useMemo(() => JSON.stringify(params), [JSON.stringify(params)]);
+  const stableParams = useMemo(
+    () => JSON.stringify(params),
+    [params]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -42,9 +48,35 @@ export function useApi<T>(
       setLoading(true);
       setError(null);
 
+      const requestParams = { ...params, page, size: params.size ?? 20 };
+
+      // Serve from cache without a network round trip when available.
+      if (cacheTtl && !refreshKey && page === 0) {
+        const cached = cacheGet<T | PaginatedResponse<T>>(url, requestParams, { ttl: cacheTtl });
+        if (cached !== undefined) {
+          const payload = (cached as unknown) as T | PaginatedResponse<T>;
+          if (Array.isArray(payload)) {
+            setData(payload as T);
+            setTotalPages(1);
+            setTotalElements((payload as unknown[]).length);
+          } else if (payload && typeof payload === 'object' && 'content' in payload) {
+            const paginated = payload as PaginatedResponse<unknown>;
+            setData(paginated.content as T);
+            setTotalPages(paginated.totalPages);
+            setTotalElements(paginated.totalElements);
+          } else {
+            setData(payload as T);
+            setTotalPages(1);
+            setTotalElements(1);
+          }
+          setLoading(false);
+          return;
+        }
+      }
+
       try {
         const response = await api.get<ApiResponse<T | PaginatedResponse<T>>>(url, {
-          params: { ...params, page, size: params.size ?? 20 },
+          params: requestParams,
         });
 
         if (cancelled) return;
@@ -65,6 +97,10 @@ export function useApi<T>(
           setData(payload as T);
           setTotalPages(1);
           setTotalElements(1);
+        }
+
+        if (cacheTtl && page === 0) {
+          cacheSet<T | PaginatedResponse<T>>(url, requestParams, payload, cacheTtl);
         }
       } catch (err) {
         if (!cancelled) {
@@ -93,6 +129,7 @@ export function useApi<T>(
 interface UsePaginatedDataOptions {
   url: string;
   params?: Record<string, unknown>;
+  cacheTtl?: number;
 }
 
 interface UsePaginatedDataReturn<T> {
@@ -109,8 +146,8 @@ interface UsePaginatedDataReturn<T> {
 export function usePaginatedData<T>(
   options: UsePaginatedDataOptions
 ): UsePaginatedDataReturn<T> {
-  const { url, params = {} } = options;
-  const result = useApi<T[]>(url, { params });
+  const { url, params = {}, cacheTtl } = options;
+  const result = useApi<T[]>(url, { params, cacheTtl });
 
   return {
     data: result.data ?? [],

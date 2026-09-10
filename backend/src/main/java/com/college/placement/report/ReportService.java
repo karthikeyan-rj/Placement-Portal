@@ -2,40 +2,67 @@ package com.college.placement.report;
 
 import com.college.placement.common.enums.Role;
 import com.college.placement.common.exception.ForbiddenException;
+import com.college.placement.common.exception.ResourceNotFoundException;
+import com.college.placement.messaging.Message;
 import com.college.placement.messaging.MessageRecipient;
 import com.college.placement.messaging.MessageRecipientRepository;
 import com.college.placement.messaging.MessageReaction;
 import com.college.placement.messaging.MessageReactionRepository;
+import com.college.placement.messaging.MessageRepository;
 import com.college.placement.placement.PlacementRecordRepository;
 import com.college.placement.security.SecurityUtils;
+import com.college.placement.student.StudentAcademic;
+import com.college.placement.student.StudentAcademicRepository;
+import com.college.placement.student.StudentPlacementInfo;
 import com.college.placement.student.StudentPlacementInfoRepository;
+import com.college.placement.student.StudentProfile;
 import com.college.placement.student.StudentProfileRepository;
-import com.college.placement.user.UserRepository;
-import com.college.placement.department.DepartmentRepository;
 import com.opencsv.CSVWriter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.PrintWriter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ReportService {
 
+    private final MessageRepository messageRepository;
     private final MessageRecipientRepository recipientRepository;
     private final MessageReactionRepository reactionRepository;
     private final PlacementRecordRepository placementRecordRepository;
     private final StudentProfileRepository profileRepository;
+    private final StudentAcademicRepository academicRepository;
     private final StudentPlacementInfoRepository placementInfoRepository;
-    private final UserRepository userRepository;
-    private final DepartmentRepository departmentRepository;
     private final SecurityUtils securityUtils;
 
+    @Transactional(readOnly = true)
     public void exportMessageAcknowledgements(Long messageId, HttpServletResponse response) throws Exception {
         securityUtils.requireAnyRole(Role.PO, Role.PC);
+
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message", messageId));
+
+        List<MessageRecipient> recipients =
+                recipientRepository.findByMessageIdWithUserAndDepartment(messageId);
+
+        if (securityUtils.isPC()) {
+            Long currentDeptId = securityUtils.getCurrentUser().getDepartment() != null
+                    ? securityUtils.getCurrentUser().getDepartment().getId() : null;
+            boolean messageWithinDept = recipients.stream().allMatch(r ->
+                    r.getRecipient().getDepartment() != null
+                            && r.getRecipient().getDepartment().getId().equals(currentDeptId));
+            if (!messageWithinDept) {
+                throw new ForbiddenException("You can only export acknowledgements for messages within your department.");
+            }
+        }
 
         response.setContentType("text/csv");
         response.setHeader("Content-Disposition", "attachment; filename=message_" + messageId + "_responses.csv");
@@ -48,28 +75,35 @@ public class ReportService {
                 "Read Status", "Reaction", "Timestamp"
         });
 
-        List<MessageRecipient> recipients = recipientRepository.findByMessageId(messageId);
+        List<Long> recipientUserIds = recipients.stream()
+                .map(r -> r.getRecipient().getId())
+                .toList();
+
+        Map<Long, String> registerByUser = new HashMap<>();
+        if (!recipientUserIds.isEmpty()) {
+            List<StudentProfile> profiles = profileRepository.findWithUserByUserIds(recipientUserIds);
+            for (StudentProfile p : profiles) {
+                registerByUser.put(p.getUser().getId(), p.getRegisterNumber());
+            }
+        }
+
+        Map<Long, String> reactionByUser = new HashMap<>();
+        if (!recipientUserIds.isEmpty()) {
+            for (MessageReaction r : reactionRepository.findByMessageId(messageId)) {
+                reactionByUser.put(r.getUser().getId(), r.getReaction().name());
+            }
+        }
 
         for (MessageRecipient recipient : recipients) {
-            String registerNumber = "";
+            String registerNumber = registerByUser.getOrDefault(recipient.getRecipient().getId(), "");
             String studentName = recipient.getRecipient().getName();
             String department = recipient.getRecipient().getDepartment() != null ?
                     recipient.getRecipient().getDepartment().getName() : "N/A";
 
-            var profile = com.college.placement.student.dto.StudentProfileResponse.builder().build();
-            var studentProfiles = profileRepository.findByUserId(recipient.getRecipient().getId());
-            if (studentProfiles.isPresent()) {
-                registerNumber = studentProfiles.get().getRegisterNumber();
-            }
-
             String deliveryStatus = recipient.getDeliveredAt() != null ? "DELIVERED" : "PENDING";
             String readStatus = recipient.getReadAt() != null ? "READ" : "UNREAD";
 
-            String reaction = "NONE";
-            var msgReaction = reactionRepository.findByMessageIdAndUserId(messageId, recipient.getRecipient().getId());
-            if (msgReaction.isPresent()) {
-                reaction = msgReaction.get().getReaction().name();
-            }
+            String reaction = reactionByUser.getOrDefault(recipient.getRecipient().getId(), "NONE");
 
             String timestamp = recipient.getCreatedAt() != null ? recipient.getCreatedAt().toString() : "";
 
@@ -83,8 +117,18 @@ public class ReportService {
         csvWriter.close();
     }
 
+    @Transactional(readOnly = true)
     public void exportStudentsCsv(Long departmentId, HttpServletResponse response) throws Exception {
         securityUtils.requireAnyRole(Role.PO, Role.PC);
+
+        if (securityUtils.isPC()) {
+            Long currentDeptId = securityUtils.getCurrentUser().getDepartment() != null
+                    ? securityUtils.getCurrentUser().getDepartment().getId() : null;
+            if (departmentId != null && !departmentId.equals(currentDeptId)) {
+                throw new ForbiddenException("You can only export students from your own department.");
+            }
+            departmentId = currentDeptId;
+        }
 
         response.setContentType("text/csv");
         response.setHeader("Content-Disposition", "attachment; filename=students_export.csv");
@@ -98,16 +142,33 @@ public class ReportService {
                 "Placement Interested", "Placement Status"
         });
 
-        List<com.college.placement.student.StudentProfile> profiles;
+        List<StudentProfile> profiles;
         if (departmentId != null) {
-            profiles = profileRepository.findByUserDepartmentId(departmentId);
+            profiles = profileRepository.findWithDetailsByDepartmentId(departmentId);
         } else {
-            profiles = profileRepository.findAll();
+            profiles = profileRepository.findAllWithDetails();
         }
 
+        List<Long> profileIds = profiles.stream().map(StudentProfile::getId).toList();
+
+        Map<Long, StudentAcademic> academicByProfile = profileIds.isEmpty() ? Map.of() :
+                academicRepository.findAllByStudentProfileIdIn(profileIds).stream()
+                        .collect(Collectors.toMap(a -> a.getStudentProfile().getId(), Function.identity()));
+        Map<Long, StudentPlacementInfo> placementByProfile = profileIds.isEmpty() ? Map.of() :
+                placementInfoRepository.findAllByStudentProfileIdIn(profileIds).stream()
+                        .collect(Collectors.toMap(p -> p.getStudentProfile().getId(), Function.identity()));
+
         for (var profile : profiles) {
-            var academic = new com.college.placement.student.StudentAcademic();
-            var placementInfo = new com.college.placement.student.StudentPlacementInfo();
+            var academic = academicByProfile.get(profile.getId());
+            var placementInfo = placementByProfile.get(profile.getId());
+
+            String cgpa = academic != null && academic.getCgpa() != null ? academic.getCgpa().toPlainString() : "";
+            String activeBacklogs = academic != null && academic.getActiveBacklogs() != null
+                    ? academic.getActiveBacklogs().toString() : "";
+            String interested = placementInfo != null && placementInfo.getPlacementInterested() != null
+                    ? (placementInfo.getPlacementInterested() ? "YES" : "NO") : "";
+            String status = placementInfo != null && placementInfo.getPlacementStatus() != null
+                    ? placementInfo.getPlacementStatus().name() : "";
 
             csvWriter.writeNext(new String[]{
                     profile.getRegisterNumber(),
@@ -116,7 +177,7 @@ public class ReportService {
                     profile.getUser().getDepartment() != null ? profile.getUser().getDepartment().getName() : "N/A",
                     profile.getBatch() != null ? profile.getBatch() : "",
                     profile.getSection() != null ? profile.getSection() : "",
-                    "", "", "", ""
+                    cgpa, activeBacklogs, interested, status
             });
         }
 
@@ -124,6 +185,7 @@ public class ReportService {
         csvWriter.close();
     }
 
+    @Transactional(readOnly = true)
     public void exportPlacementReport(HttpServletResponse response) throws Exception {
         securityUtils.requireRole(Role.PO);
 
@@ -138,7 +200,7 @@ public class ReportService {
                 "Company", "Package (LPA)", "Placement Date", "Status"
         });
 
-        var allProfiles = profileRepository.findAll();
+        var allProfiles = profileRepository.findAllWithDetails();
         for (var profile : allProfiles) {
             var records = placementRecordRepository.findByStudentProfileIdOrderByPlacementDateDesc(profile.getId());
             for (var record : records) {
@@ -146,8 +208,8 @@ public class ReportService {
                         profile.getRegisterNumber(),
                         profile.getUser().getName(),
                         profile.getUser().getDepartment() != null ? profile.getUser().getDepartment().getName() : "N/A",
-                        record.getCompany().getName(),
-                        record.getPackageLpa() != null ? record.getPackageLpa().toString() : "N/A",
+                        record.getCompany() != null ? record.getCompany().getName() : "N/A",
+                        record.getPackageLpa() != null ? record.getPackageLpa().toPlainString() : "N/A",
                         record.getPlacementDate() != null ? record.getPlacementDate().toString() : "N/A",
                         record.getStatus()
                 });

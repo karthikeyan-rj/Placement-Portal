@@ -21,7 +21,7 @@ public class DatabaseMigration implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        log.info("Running database migration to fix bytea columns...");
+        log.info("Running database migration step (column fixes + performance indexes)...");
         try {
             List<String> migrations = List.of(
                 // Users table
@@ -69,7 +69,31 @@ public class DatabaseMigration implements CommandLineRunner {
                 "ALTER TABLE student_interviews ALTER COLUMN round_name TYPE VARCHAR(255) USING round_name::text",
 
                 // Placement preference history table
-                "ALTER TABLE placement_preference_history ALTER COLUMN reason TYPE VARCHAR(500) USING reason::text"
+                "ALTER TABLE placement_preference_history ALTER COLUMN reason TYPE VARCHAR(500) USING reason::text",
+
+                // Student access codes - allow pre-registration keying by register number
+                // (student_profile_id is attached only after a profile is created)
+                "ALTER TABLE student_access_codes ALTER COLUMN student_profile_id DROP NOT NULL",
+                "ALTER TABLE student_access_codes ADD COLUMN IF NOT EXISTS register_number VARCHAR(255)",
+                "ALTER TABLE student_access_codes ADD COLUMN IF NOT EXISTS name VARCHAR(255)",
+                "ALTER TABLE student_access_codes ADD COLUMN IF NOT EXISTS department_code VARCHAR(255)",
+                "ALTER TABLE student_access_codes ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
+                "ALTER TABLE student_access_codes ALTER COLUMN register_number SET NOT NULL",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_sac_register_number ON student_access_codes (register_number)",
+
+                // Performance indexes (evidence-based, see Phase 4G-C report):
+                // place on FK columns and frequently filtered/sorted columns that previously
+                // relied on sequential scans (verified via pg_indexes that only PK/unique
+                // indexes existed on these tables at the time of the audit). Column names
+                // match the @JoinColumn mappings in the JPA entities.
+                "CREATE INDEX IF NOT EXISTS idx_messages_sender_created ON messages (sender_id, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_message_recipients_recipient_created ON message_recipients (recipient_id, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_message_recipients_message ON message_recipients (message_id)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs (created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by_created ON audit_logs (performed_by, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_placement_drives_status_date ON placement_drives (status, drive_date DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_placement_drives_company ON placement_drives (company_id)",
+                "CREATE INDEX IF NOT EXISTS idx_contact_requests_target_created ON contact_requests (target_user_id, created_at DESC)"
             );
 
             int successCount = 0;

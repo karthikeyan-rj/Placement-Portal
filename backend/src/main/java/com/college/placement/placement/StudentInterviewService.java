@@ -37,8 +37,35 @@ public class StudentInterviewService {
 
     @Transactional(readOnly = true)
     public List<StudentInterviewResponse> getInterviewsByStudent(Long studentProfileId) {
+        validateStudentInterviewAccess(studentProfileId);
         return interviewRepository.findByStudentProfileIdOrderByInterviewDateDesc(studentProfileId)
                 .stream().map(this::toResponse).toList();
+    }
+
+    private void validateStudentInterviewAccess(Long studentProfileId) {
+        StudentProfile profile = profileRepository.findById(studentProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile", studentProfileId));
+        User currentUser = securityUtils.getCurrentUser();
+        Role role = currentUser.getRole();
+        if (role == Role.PO) return;
+
+        if (role == Role.STUDENT) {
+            if (!currentUser.getId().equals(profile.getUser().getId())) {
+                throw new ForbiddenException("You can only access your own interview records.");
+            }
+            return;
+        }
+
+        if (role == Role.PC) {
+            if (currentUser.getDepartment() == null ||
+                    profile.getUser().getDepartment() == null ||
+                    !currentUser.getDepartment().getId().equals(profile.getUser().getDepartment().getId())) {
+                throw new ForbiddenException("You can only access students within your department.");
+            }
+            return;
+        }
+
+        throw new ForbiddenException("You do not have access to interview records.");
     }
 
     @Transactional(readOnly = true)
@@ -133,6 +160,10 @@ public class StudentInterviewService {
                 .attended(interview.getAttended())
                 .remarks(interview.getRemarks())
                 .interviewDate(interview.getInterviewDate() != null ? interview.getInterviewDate().toString() : null)
+                .driveDate(interview.getPlacementDrive().getDriveDate() != null
+                        ? interview.getPlacementDrive().getDriveDate().toString() : null)
+                .driveLocation(interview.getPlacementDrive().getLocation())
+                .packageLpa(interview.getPlacementDrive().getPackageLpa())
                 .build();
     }
 }

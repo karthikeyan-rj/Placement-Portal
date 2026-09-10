@@ -2,11 +2,17 @@
 .env
 .env.local
 .env.*.local
+backend/.env
+frontend/.env
+*.token
 !.env.example
 
 # Spring Boot / Maven
 backend/target/
 *.jar.original
+
+# Authorized student data + generated access codes (never commit student PII or plaintext codes)
+backend/data/
 
 # Node
 node_modules/

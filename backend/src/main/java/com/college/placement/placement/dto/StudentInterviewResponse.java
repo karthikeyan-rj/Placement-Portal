@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -22,4 +24,7 @@ public class StudentInterviewResponse {
     private Boolean attended;
     private String remarks;
     private String interviewDate;
+    private String driveDate;
+    private String driveLocation;
+    private BigDecimal packageLpa;
 }

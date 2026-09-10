@@ -18,9 +18,24 @@ api.interceptors.response.use(
     if (error.response) {
       const status = error.response.status;
       if (status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+        const url: string = error.config?.url || '';
+        const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+        const hasToken = !!localStorage.getItem('token');
+
+        if (!isAuthEndpoint) {
+          if (hasToken) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+          } else {
+            const devMode = import.meta.env.VITE_DEV_MODE === 'true';
+            const previewing = devMode && !!localStorage.getItem('dev-preview-role');
+            if (previewing) {
+              localStorage.removeItem('dev-preview-role');
+              window.location.href = '/login';
+            }
+          }
+        }
       }
     }
     return Promise.reject(error);

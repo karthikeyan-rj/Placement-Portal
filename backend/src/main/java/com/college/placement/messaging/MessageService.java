@@ -15,13 +15,16 @@ import com.college.placement.user.User;
 import com.college.placement.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -64,21 +67,21 @@ public class MessageService {
         auditService.log("SEND_MESSAGE", "Message", message.getId(),
                 "To " + recipients.size() + " recipients");
 
-        return toResponse(message);
+        return toResponse(message, loadStats(List.of(message.getId())));
     }
 
     @Transactional(readOnly = true)
     public Page<MessageResponse> getSentMessages(Pageable pageable) {
         User currentUser = securityUtils.getCurrentUser();
-        return messageRepository.findBySenderIdOrderByCreatedAtDesc(currentUser.getId(), pageable)
-                .map(this::toResponse);
+        Page<Message> page = messageRepository.findBySenderIdOrderByCreatedAtDesc(currentUser.getId(), pageable);
+        return buildResponses(page, pageable);
     }
 
     @Transactional(readOnly = true)
     public Page<MessageResponse> getReceivedMessages(Pageable pageable) {
         User currentUser = securityUtils.getCurrentUser();
-        return messageRepository.findMessagesReceivedByUser(currentUser.getId(), pageable)
-                .map(this::toResponse);
+        Page<Message> page = messageRepository.findMessagesReceivedByUser(currentUser.getId(), pageable);
+        return buildResponses(page, pageable);
     }
 
     @Transactional
@@ -95,6 +98,10 @@ public class MessageService {
     @Transactional
     public void addReaction(Long messageId, MessageReactionRequest request) {
         User currentUser = securityUtils.getCurrentUser();
+
+        if (!recipientRepository.existsByMessageIdAndRecipientId(messageId, currentUser.getId())) {
+            throw new ForbiddenException("You can only react to messages addressed to you.");
+        }
 
         MessageReactionType reactionType;
         try {
@@ -123,6 +130,14 @@ public class MessageService {
 
     @Transactional(readOnly = true)
     public long getMessageAnalytics(Long messageId, String analyticsType) {
+        User currentUser = securityUtils.getCurrentUser();
+
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message", messageId));
+        if (!message.getSender().getId().equals(currentUser.getId())) {
+            throw new ForbiddenException("Only the sender can view message analytics.");
+        }
+
         switch (analyticsType.toUpperCase()) {
             case "TOTAL": return recipientRepository.countByMessageId(messageId);
             case "DELIVERED": return recipientRepository.countByMessageIdAndDeliveredAtIsNotNull(messageId);
@@ -203,7 +218,34 @@ public class MessageService {
         return MessageType.DIRECT;
     }
 
-    private MessageResponse toResponse(Message message) {
+    private Page<MessageResponse> buildResponses(Page<Message> page, Pageable pageable) {
+        List<Message> messages = page.getContent();
+        Map<Long, MessageStats> stats = loadStats(messages.stream().map(Message::getId).toList());
+        List<MessageResponse> responses = messages.stream()
+                .map(m -> toResponse(m, stats))
+                .toList();
+        return new PageImpl<>(responses, pageable, page.getTotalElements());
+    }
+
+    private Map<Long, MessageStats> loadStats(List<Long> messageIds) {
+        if (messageIds.isEmpty()) return Map.of();
+
+        Map<Long, MessageStats> stats = new HashMap<>();
+        for (MessageRecipientRepository.CombinedMessageStats s : recipientRepository.aggregateAllStats(messageIds)) {
+            stats.put(s.getMessageId(), new MessageStats(
+                    s.getTotal() != null ? s.getTotal() : 0L,
+                    s.getDelivered() != null ? s.getDelivered() : 0L,
+                    s.getReadCount() != null ? s.getReadCount() : 0L,
+                    s.getUpvotes() != null ? s.getUpvotes() : 0L,
+                    s.getDownvotes() != null ? s.getDownvotes() : 0L));
+        }
+        return stats;
+    }
+
+    private record MessageStats(long total, long delivered, long read, long upvotes, long downvotes) {}
+
+    private MessageResponse toResponse(Message message, Map<Long, MessageStats> stats) {
+        MessageStats s = stats.getOrDefault(message.getId(), new MessageStats(0L, 0L, 0L, 0L, 0L));
         return MessageResponse.builder()
                 .id(message.getId())
                 .senderName(message.getSender().getName())
@@ -212,11 +254,11 @@ public class MessageService {
                 .content(message.getContent())
                 .messageType(message.getMessageType().name())
                 .createdAt(message.getCreatedAt().toString())
-                .totalRecipients((int) recipientRepository.countByMessageId(message.getId()))
-                .deliveredCount((int) recipientRepository.countByMessageIdAndDeliveredAtIsNotNull(message.getId()))
-                .readCount((int) recipientRepository.countByMessageIdAndReadAtIsNotNull(message.getId()))
-                .upvoteCount((int) reactionRepository.countByMessageIdAndReaction(message.getId(), MessageReactionType.UPVOTE))
-                .downvoteCount((int) reactionRepository.countByMessageIdAndReaction(message.getId(), MessageReactionType.DOWNVOTE))
+                .totalRecipients((int) s.total)
+                .deliveredCount((int) s.delivered)
+                .readCount((int) s.read)
+                .upvoteCount((int) s.upvotes)
+                .downvoteCount((int) s.downvotes)
                 .build();
     }
 }

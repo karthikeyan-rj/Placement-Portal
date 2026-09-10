@@ -17,6 +17,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 public class StudentService {
@@ -31,49 +33,65 @@ public class StudentService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public Page<StudentProfileResponse> searchStudents(String search, Long departmentId, Pageable pageable) {
-        Role role = securityUtils.getCurrentUserRole();
+    public Page<?> searchStudents(String search, Long departmentId, Pageable pageable) {
+        User currentUser = securityUtils.getCurrentUser();
+        Role role = currentUser.getRole();
 
-        Page<StudentProfile> profiles;
+        Page<StudentProfileRepository.StudentListProjection> rows;
         if (role == Role.PO) {
             if (departmentId != null) {
-                profiles = profileRepository.searchByDepartment(departmentId, search, pageable);
+                rows = profileRepository.searchByDepartmentProjected(departmentId, search, pageable);
             } else {
-                profiles = profileRepository.searchAll(search, pageable);
+                rows = profileRepository.searchAllProjected(search, pageable);
             }
+            return rows.map(this::toResponseFromProjection);
         } else if (role == Role.PC || role == Role.PR) {
-            Long userDeptId = securityUtils.getCurrentUser().getDepartment().getId();
+            Long userDeptId = currentUser.getDepartment() != null ? currentUser.getDepartment().getId() : null;
+            if (userDeptId == null) {
+                throw new ForbiddenException("You are not assigned to a department.");
+            }
             if (departmentId != null && !departmentId.equals(userDeptId)) {
                 throw new ForbiddenException("You can only access students within your department.");
             }
-            profiles = profileRepository.searchByDepartment(userDeptId, search, pageable);
+            rows = profileRepository.searchByDepartmentProjected(userDeptId, search, pageable);
+            if (role == Role.PR) {
+                return rows.map(this::toSummaryFromProjection);
+            }
+            return rows.map(this::toResponseFromProjection);
         } else {
             throw new ForbiddenException("You do not have permission to search students.");
         }
-
-        return profiles.map(this::toResponse);
     }
 
     @Transactional(readOnly = true)
-    public StudentProfileResponse getStudentById(Long id) {
+    public Object getStudentById(Long id) {
         StudentProfile profile = findProfile(id);
         validateStudentAccess(profile);
+        if (securityUtils.isPR()) {
+            return toSummaryResponse(profile);
+        }
         return toResponse(profile);
     }
 
     @Transactional(readOnly = true)
-    public StudentProfileResponse getStudentByUserId(Long userId) {
+    public Object getStudentByUserId(Long userId) {
         StudentProfile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student profile", userId));
-        return toResponse(profile);
+        validateStudentAccess(profile);
+        if (securityUtils.isPR()) {
+            return toSummaryResponse(profile);
+        }
+        StudentProfileRepository.StudentListProjection projected = profileRepository.findByUserIdProjected(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile", userId));
+        return toResponseFromProjection(projected);
     }
 
     @Transactional(readOnly = true)
     public StudentProfileResponse getMyProfile() {
         User currentUser = securityUtils.getCurrentUser();
-        StudentProfile profile = profileRepository.findByUserId(currentUser.getId())
+        StudentProfileRepository.StudentListProjection projected = profileRepository.findByUserIdProjected(currentUser.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Student profile for current user"));
-        return toResponse(profile);
+        return toResponseFromProjection(projected);
     }
 
     @Transactional
@@ -139,10 +157,23 @@ public class StudentService {
 
         if (request.getPhone() != null) profile.setPhone(request.getPhone());
         if (request.getDateOfBirth() != null) {
-            profile.setDateOfBirth(java.time.LocalDate.parse(request.getDateOfBirth()));
+            try {
+                profile.setDateOfBirth(java.time.LocalDate.parse(request.getDateOfBirth()));
+            } catch (java.time.format.DateTimeParseException e) {
+                throw new BadRequestException("Date of birth must be in YYYY-MM-DD format.");
+            }
         }
         if (request.getBatch() != null) profile.setBatch(request.getBatch());
         if (request.getSection() != null) profile.setSection(request.getSection());
+
+        if (request.getPlacementInterested() != null) {
+            StudentPlacementInfo placementInfo = placementInfoRepository.findByStudentProfileId(id);
+            if (placementInfo == null) {
+                placementInfo = StudentPlacementInfo.builder().studentProfile(profile).build();
+            }
+            placementInfo.setPlacementInterested(request.getPlacementInterested());
+            placementInfoRepository.save(placementInfo);
+        }
 
         profile = profileRepository.save(profile);
         auditService.log("UPDATE_STUDENT_PROFILE", "StudentProfile", profile.getId(),
@@ -162,7 +193,7 @@ public class StudentService {
         }
 
         try {
-            String oldValue = objectMapper.writeValueAsString(academic);
+            Map<String, Object> before = academicSnapshot(academic);
 
             if (request.getCgpa() != null) academic.setCgpa(request.getCgpa());
             if (request.getTenthPercentage() != null) academic.setTenthPercentage(request.getTenthPercentage());
@@ -173,9 +204,9 @@ public class StudentService {
 
             academicRepository.save(academic);
 
-            String newValue = objectMapper.writeValueAsString(academic);
+            Map<String, Object> after = academicSnapshot(academic);
             auditService.log("UPDATE_STUDENT_ACADEMIC", "StudentAcademic", academic.getId(),
-                    oldValue, newValue);
+                    objectMapper.writeValueAsString(before), objectMapper.writeValueAsString(after));
         } catch (Exception e) {
             throw new BadRequestException("Failed to update academic information.");
         }
@@ -213,10 +244,27 @@ public class StudentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Student profile", id));
     }
 
+    private Map<String, Object> academicSnapshot(StudentAcademic academic) {
+        Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+        snapshot.put("tenthPercentage", academic.getTenthPercentage());
+        snapshot.put("twelfthPercentage", academic.getTwelfthPercentage());
+        snapshot.put("diplomaPercentage", academic.getDiplomaPercentage());
+        snapshot.put("cgpa", academic.getCgpa());
+        snapshot.put("activeBacklogs", academic.getActiveBacklogs());
+        snapshot.put("historyOfBacklogs", academic.getHistoryOfBacklogs());
+        return snapshot;
+    }
+
     private void validateStudentAccess(StudentProfile profile) {
         Role role = securityUtils.getCurrentUserRole();
         if (role == Role.PO) return;
-        if (role == Role.STUDENT) return;
+        if (role == Role.STUDENT) {
+            User currentUser = securityUtils.getCurrentUser();
+            if (!currentUser.getId().equals(profile.getUser().getId())) {
+                throw new ForbiddenException("You can only access your own profile.");
+            }
+            return;
+        }
 
         User currentUser = securityUtils.getCurrentUser();
         if (role == Role.PC || role == Role.PR) {
@@ -245,10 +293,16 @@ public class StudentService {
     }
 
     private StudentProfileResponse toResponse(StudentProfile profile) {
-        StudentAcademic academic = academicRepository.findByStudentProfileId(profile.getId());
-        StudentProfessional professional = professionalRepository.findByStudentProfileId(profile.getId());
-        StudentPlacementInfo placementInfo = placementInfoRepository.findByStudentProfileId(profile.getId());
+        return toResponse(profile,
+                academicRepository.findByStudentProfileId(profile.getId()),
+                professionalRepository.findByStudentProfileId(profile.getId()),
+                placementInfoRepository.findByStudentProfileId(profile.getId()));
+    }
 
+    private StudentProfileResponse toResponse(StudentProfile profile,
+                                              StudentAcademic academic,
+                                              StudentProfessional professional,
+                                              StudentPlacementInfo placementInfo) {
         StudentProfileResponse.StudentProfileResponseBuilder builder = StudentProfileResponse.builder()
                 .id(profile.getId())
                 .userId(profile.getUser().getId())
@@ -284,9 +338,92 @@ public class StudentService {
         if (placementInfo != null) {
             builder.placementInterested(placementInfo.getPlacementInterested())
                     .placementStatus(placementInfo.getPlacementStatus().name())
-                    .interviewsAttended(placementInfo.getInterviewsAttended());
+                    .interviewsAttended(placementInfo.getInterviewsAttended())
+                    .placedCompanyId(placementInfo.getPlacedCompany() != null ? placementInfo.getPlacedCompany().getId() : null)
+                    .placedCompanyName(placementInfo.getPlacedCompany() != null ? placementInfo.getPlacedCompany().getName() : null)
+                    .packageLpa(placementInfo.getPackageLpa());
         }
 
         return builder.build();
+    }
+
+    private StudentSummaryResponse toSummaryResponse(StudentProfile profile) {
+        return toSummaryResponse(profile,
+                academicRepository.findByStudentProfileId(profile.getId()),
+                placementInfoRepository.findByStudentProfileId(profile.getId()));
+    }
+
+    private StudentSummaryResponse toSummaryResponse(StudentProfile profile,
+                                                     StudentAcademic academic,
+                                                     StudentPlacementInfo placementInfo) {
+        StudentSummaryResponse.StudentSummaryResponseBuilder builder = StudentSummaryResponse.builder()
+                .id(profile.getId())
+                .userId(profile.getUser().getId())
+                .userName(profile.getUser().getName())
+                .userEmail(profile.getUser().getEmail())
+                .registerNumber(profile.getRegisterNumber())
+                .departmentId(profile.getUser().getDepartment() != null ? profile.getUser().getDepartment().getId() : null)
+                .departmentName(profile.getUser().getDepartment() != null ? profile.getUser().getDepartment().getName() : null);
+
+        if (academic != null) {
+            builder.cgpa(academic.getCgpa());
+        }
+
+        if (placementInfo != null) {
+            builder.placementInterested(placementInfo.getPlacementInterested())
+                    .placementStatus(placementInfo.getPlacementStatus().name());
+        }
+
+        return builder.build();
+    }
+
+    private StudentProfileResponse toResponseFromProjection(StudentProfileRepository.StudentListProjection r) {
+        return StudentProfileResponse.builder()
+                .id(r.getId())
+                .userId(r.getUserId())
+                .userName(r.getUserName())
+                .userEmail(r.getUserEmail())
+                .registerNumber(r.getRegisterNumber())
+                .phone(r.getPhone())
+                .dateOfBirth(r.getDateOfBirth())
+                .departmentId(r.getDepartmentId())
+                .departmentName(r.getDepartmentName())
+                .batch(r.getBatch())
+                .section(r.getSection())
+                .tenthPercentage(r.getTenthPercentage())
+                .twelfthPercentage(r.getTwelfthPercentage())
+                .diplomaPercentage(r.getDiplomaPercentage())
+                .cgpa(r.getCgpa())
+                .activeBacklogs(r.getActiveBacklogs())
+                .historyOfBacklogs(r.getHistoryOfBacklogs())
+                .skills(r.getSkills())
+                .certifications(r.getCertifications())
+                .projects(r.getProjects())
+                .resumeUrl(r.getResumeUrl())
+                .githubUrl(r.getGithubUrl())
+                .linkedinUrl(r.getLinkedinUrl())
+                .portfolioUrl(r.getPortfolioUrl())
+                .placementInterested(r.getPlacementInterested())
+                .placementStatus(r.getPlacementStatus())
+                .interviewsAttended(r.getInterviewsAttended())
+                .placedCompanyId(r.getPlacedCompanyId())
+                .placedCompanyName(r.getPlacedCompanyName())
+                .packageLpa(r.getPackageLpa())
+                .build();
+    }
+
+    private StudentSummaryResponse toSummaryFromProjection(StudentProfileRepository.StudentListProjection r) {
+        return StudentSummaryResponse.builder()
+                .id(r.getId())
+                .userId(r.getUserId())
+                .userName(r.getUserName())
+                .userEmail(r.getUserEmail())
+                .registerNumber(r.getRegisterNumber())
+                .departmentId(r.getDepartmentId())
+                .departmentName(r.getDepartmentName())
+                .cgpa(r.getCgpa())
+                .placementInterested(r.getPlacementInterested())
+                .placementStatus(r.getPlacementStatus())
+                .build();
     }
 }

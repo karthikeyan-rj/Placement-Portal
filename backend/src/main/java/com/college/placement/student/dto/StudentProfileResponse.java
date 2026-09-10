@@ -42,4 +42,7 @@ public class StudentProfileResponse {
     private Boolean placementInterested;
     private String placementStatus;
     private Integer interviewsAttended;
+    private Long placedCompanyId;
+    private String placedCompanyName;
+    private BigDecimal packageLpa;
 }

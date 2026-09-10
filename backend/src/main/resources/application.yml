@@ -7,7 +7,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
     open-in-view: false
     properties:
       hibernate:
@@ -26,6 +26,10 @@ logging:
   level:
     com.college.placement: INFO
     org.springframework.security: WARN
+
+app:
+  seed-bulk-demo-data: ${SEED_BULK_DEMO_DATA:false}
+  seed-bulk-demo-cleanup: ${SEED_BULK_DEMO_CLEANUP:false}
 
 springdoc:
   api-docs:

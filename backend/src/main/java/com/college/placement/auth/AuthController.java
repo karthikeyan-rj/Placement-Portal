@@ -1,9 +1,12 @@
 package com.college.placement.auth;
 
+import com.college.placement.auth.dto.ChangePasswordRequest;
 import com.college.placement.auth.dto.LoginRequest;
 import com.college.placement.auth.dto.LoginResponse;
+import com.college.placement.auth.dto.MeResponse;
 import com.college.placement.auth.dto.RegisterRequest;
 import com.college.placement.auth.dto.RegisterResponse;
+import com.college.placement.common.dto.ApiResponse;
 import com.college.placement.common.exception.UnauthorizedException;
 import com.college.placement.security.JwtProvider;
 import com.college.placement.user.User;
@@ -55,5 +58,33 @@ public class AuthController {
     public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
         RegisterResponse response = authService.registerStudent(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully.", null));
+    }
+
+    @GetMapping("/me")
+    @Transactional(readOnly = true)
+    public MeResponse me() {
+        Authentication authentication =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw new UnauthorizedException("Not authenticated");
+        }
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+        return MeResponse.builder()
+                .id(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .role(user.getRole().name())
+                .departmentId(user.getDepartment() != null ? user.getDepartment().getId() : null)
+                .departmentName(user.getDepartment() != null ? user.getDepartment().getName() : null)
+                .active(user.getActive())
+                .build();
     }
 }

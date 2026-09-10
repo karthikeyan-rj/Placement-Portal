@@ -6,14 +6,12 @@ interface WorkflowStepProps {
 
 export default function WorkflowStep({ step, title, description }: WorkflowStepProps) {
   return (
-    <div className="relative">
-      <div className="flex items-center gap-4">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary-200 bg-primary-50 text-[14px] font-semibold text-primary-700">
-          {step}
-        </span>
-        <h3 className="text-[16px] font-semibold text-neutral-900">{title}</h3>
+    <div className="relative flex flex-col items-start">
+      <div className="mb-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-500 text-[14px] font-bold text-white shadow-soft">
+        {step}
       </div>
-      <p className="mt-3 text-[14px] leading-relaxed text-neutral-600">
+      <h3 className="text-[15px] font-semibold text-neutral-900">{title}</h3>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-text-secondary">
         {description}
       </p>
     </div>

@@ -1,141 +1,604 @@
-import { useState, useEffect } from 'react';
-import { reportApi, departmentApi } from '../../api/api';
-import type { Department } from '../../types';
-import { Button, Select, PageHeader, PageContainer, Card, Skeleton } from '../../components/ui';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { reportApi, departmentApi, studentApi, companyApi, placementDriveApi } from '../../api/api';
+import type { Department, StudentProfile, PlacementDrive, Company } from '../../types';
 import { getErrorMessage } from '../../api/axios';
-import { Download, Users, FileText, Building2, AlertCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
+import {
+  Button,
+  Select,
+  Dropdown,
+  Card,
+  PageHeader,
+  PageContainer,
+  EmptyState,
+  ErrorState,
+  FilterToolbar,
+  Skeleton,
+  notify,
+} from '../../components/ui';
+import { MetricCard, MetricsSkeleton } from '../../components/dashboard';
+import {
+  Users,
+  GraduationCap,
+  Briefcase,
+  Building2,
+  Download,
+  BarChart3,
+  FilterX,
+  FileDown,
+  FileSpreadsheet,
+} from 'lucide-react';
+
+const DONE_DRIVE_STATUSES = ['COMPLETED', 'CANCELLED'];
+
+interface DepartmentStat {
+  id: number;
+  name: string;
+  students: number;
+  interested: number;
+  placed: number;
+  rate: number;
+}
+
+interface BatchStat {
+  batch: string;
+  students: number;
+  interested: number;
+  placed: number;
+  rate: number;
+}
+
+interface StatusSegment {
+  key: string;
+  label: string;
+  color: string;
+  count: number;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function slugify(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '') || 'report'
+  );
+}
+
+function prettyNumber(n: number): string {
+  return n.toLocaleString('en-IN');
+}
+
+function fileDateStamp(): string {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}-${MONTHS[d.getMonth()]}-${d.getFullYear()}`;
+}
+
+async function fetchAllStudents(): Promise<StudentProfile[]> {
+  const all: StudentProfile[] = [];
+  const size = 500;
+  let page = 0;
+  for (let guard = 0; guard < 50; guard += 1) {
+    const res = await studentApi.search({ page, size });
+    const data = res.data?.data;
+    const content: StudentProfile[] = data?.content ?? [];
+    all.push(...content);
+    const totalElements = data?.totalElements ?? all.length;
+    if (content.length === 0 || all.length >= totalElements) break;
+    page += 1;
+  }
+  return all;
+}
 
 export default function ReportsPage() {
-  const [downloadingType, setDownloadingType] = useState<string | null>(null);
-  const [selectedDept, setSelectedDept] = useState('');
+  const { user } = useAuth();
+  const isPo = user?.role === 'PO';
 
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [deptLoading, setDeptLoading] = useState(true);
-  const [deptError, setDeptError] = useState<string | null>(null);
+  const [students, setStudents] = useState<StudentProfile[]>([]);
+  const [drives, setDrives] = useState<PlacementDrive[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+
+  const [deptFilter, setDeptFilter] = useState('');
+  const [exporting, setExporting] = useState<string | null>(null);
 
   useEffect(() => {
-    departmentApi.getAll()
-      .then((res) => setDepartments(res.data.data))
-      .catch((err) => setDeptError(getErrorMessage(err)))
-      .finally(() => setDeptLoading(false));
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const [deptRes, studentList, driveRes, companyRes] = await Promise.all([
+          departmentApi.getAll(),
+          fetchAllStudents(),
+          placementDriveApi.getAll({ size: 500 }),
+          companyApi.getAll({ size: 500 }),
+        ]);
+        if (cancelled) return;
+        setDepartments(deptRes.data?.data ?? []);
+        setStudents(studentList);
+        setDrives(driveRes.data?.data?.content ?? []);
+        setCompanies(companyRes.data?.data?.content ?? []);
+      } catch (err) {
+        if (!cancelled) setError(getErrorMessage(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [retryKey]);
 
-  const handleDownload = async (type: string) => {
-    setDownloadingType(type);
+  const handleRetry = () => {
+    setError(null);
+    setLoading(true);
+    setRetryKey((k) => k + 1);
+  };
+
+  const stats = useMemo(() => {
+    const studentsInScope =
+      deptFilter === '' ? students : students.filter((s) => String(s.departmentId) === deptFilter);
+
+    const placed = studentsInScope.filter((s) => s.placementStatus === 'PLACED').length;
+    const interested = studentsInScope.filter((s) => s.placementInterested).length;
+    const rate = studentsInScope.length ? Math.round((placed / studentsInScope.length) * 1000) / 10 : 0;
+
+    const notPlaced = studentsInScope.filter(
+      (s) => s.placementStatus !== 'PLACED' && s.placementStatus !== 'BLOCKED'
+    ).length;
+    const blocked = studentsInScope.filter((s) => s.placementStatus === 'BLOCKED').length;
+
+    const activeDrives = drives.filter((d) => !DONE_DRIVE_STATUSES.includes(d.status)).length;
+    const completedDrives = drives.filter((d) => d.status === 'COMPLETED').length;
+    const activeCompanies = companies.filter((c) => c.active).length;
+
+    const deptMap = new Map<number, DepartmentStat>();
+    for (const s of studentsInScope) {
+      const d = deptMap.get(s.departmentId) ?? {
+        id: s.departmentId,
+        name: s.departmentName || `Department #${s.departmentId}`,
+        students: 0,
+        interested: 0,
+        placed: 0,
+        rate: 0,
+      };
+      d.students += 1;
+      if (s.placementInterested) d.interested += 1;
+      if (s.placementStatus === 'PLACED') d.placed += 1;
+      deptMap.set(s.departmentId, d);
+    }
+    const byDept = Array.from(deptMap.values())
+      .map((d) => ({
+        ...d,
+        rate: d.students ? Math.round((d.placed / d.students) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.placed - a.placed || b.students - a.students);
+
+    const batchMap = new Map<string, BatchStat>();
+    for (const s of studentsInScope) {
+      const key = s.batch?.trim() || 'Not specified';
+      const b = batchMap.get(key) ?? { batch: key, students: 0, interested: 0, placed: 0, rate: 0 };
+      b.students += 1;
+      if (s.placementInterested) b.interested += 1;
+      if (s.placementStatus === 'PLACED') b.placed += 1;
+      batchMap.set(key, b);
+    }
+    const byBatch = Array.from(batchMap.values())
+      .map((b) => ({
+        ...b,
+        rate: b.students ? Math.round((b.placed / b.students) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => {
+        if (a.batch === 'Not specified') return 1;
+        if (b.batch === 'Not specified') return -1;
+        return b.students - a.students;
+      });
+
+    const statusSegments: StatusSegment[] = [
+      { key: 'PLACED', label: 'Placed', color: '#059669', count: placed },
+      { key: 'NOT_PLACED', label: 'Not placed', color: '#cbd5e1', count: notPlaced },
+      { key: 'BLOCKED', label: 'Blocked', color: '#f59e0b', count: blocked },
+    ].filter((seg) => seg.count > 0);
+
+    return {
+      studentsInScope,
+      totalStudents: studentsInScope.length,
+      placed,
+      interested,
+      rate,
+      blocked,
+      statusSegments,
+      activeDrives,
+      completedDrives,
+      activeCompanies,
+      byDept,
+      byBatch,
+    };
+  }, [students, drives, companies, deptFilter]);
+
+  const deptOptions = useMemo(() => {
+    const presentDeptIds = new Set(students.map((s) => s.departmentId));
+    return (isPo ? departments : departments.filter((d) => presentDeptIds.has(d.id))).map((d) => ({
+      label: d.name,
+      value: String(d.id),
+    }));
+  }, [departments, students, isPo]);
+
+  const selectedDeptName = useMemo(
+    () => departments.find((d) => String(d.id) === deptFilter)?.name,
+    [departments, deptFilter]
+  );
+
+  const handleExport = async (type: 'students' | 'placement') => {
+    setExporting(type);
     try {
-      let res;
-      if (type === 'students') {
-        res = await reportApi.students();
-      } else if (type === 'placements') {
-        res = await reportApi.placements();
-      } else if (type === 'department') {
-        if (!selectedDept) {
-          toast.error('Please select a department first');
-          setDownloadingType(null);
-          return;
-        }
-        res = await reportApi.students(Number(selectedDept));
-      }
-
-      if (res) {
-        const blob = new Blob([res.data], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${type}_report.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        toast.success('Report downloaded successfully');
-      }
+      const res =
+        type === 'students'
+          ? await reportApi.students(deptFilter === '' ? undefined : Number(deptFilter))
+          : await reportApi.placements();
+      const blob = new Blob([res.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const stamp = fileDateStamp();
+      a.download =
+        type === 'students'
+          ? selectedDeptName
+            ? `students-${slugify(selectedDeptName)}-${stamp}.csv`
+            : `students-all-departments-${stamp}.csv`
+          : `placement-report-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      notify.success('Report downloaded successfully');
     } catch {
-      toast.error('Failed to download report');
+      notify.error('Failed to download report');
     } finally {
-      setDownloadingType(null);
+      setExporting(null);
     }
   };
 
-  const reports = [
+  const exportItems = [
     {
-      type: 'students',
-      title: 'Student Report',
-      description: 'Download a complete CSV of all students with profiles, academics, and placement status.',
-      icon: <Users size={20} />,
-      needsDept: false,
+      label: 'Students CSV',
+      onClick: () => handleExport('students'),
+      icon: <FileSpreadsheet size={14} />,
     },
-    {
-      type: 'placements',
-      title: 'Placement Report',
-      description: 'Export all placement records including company details, roles, and selection status.',
-      icon: <FileText size={20} />,
-      needsDept: false,
-    },
-    {
-      type: 'department',
-      title: 'Department-wise Report',
-      description: 'Download student data filtered by a specific department.',
-      icon: <Building2 size={20} />,
-      needsDept: true,
-    },
+    ...(isPo
+      ? [
+          {
+            label: 'Placement Report CSV',
+            onClick: () => handleExport('placement'),
+            icon: <FileDown size={14} />,
+          },
+        ]
+      : []),
   ];
 
   return (
-    <PageContainer>
-      <PageHeader title="Reports" description="Download placement and student reports." />
+    <div className="bg-background min-h-screen">
+      <PageContainer className="py-8">
+        <PageHeader
+          title="Reports"
+          description="Placement performance and recruitment insights."
+        />
 
-      {deptError && (
-        <div className="mb-6 p-4 bg-warning-50 rounded-lg border border-warning-200 flex items-center gap-3">
-          <AlertCircle size={16} className="text-warning-600 shrink-0" />
-          <p className="text-[14px] text-warning-700">Could not load departments for filtering. {deptError}</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {reports.map((report) => (
-          <Card key={report.type} className="flex flex-col" padding="lg">
-            <div className="flex items-start gap-4 mb-4">
-              <div className="p-3 rounded-lg bg-brand-navy text-white shrink-0">
-                {report.icon}
-              </div>
-              <div className="flex-1">
-                <h3 className="text-[16px] font-semibold text-neutral-900">{report.title}</h3>
-                <p className="text-[14px] text-neutral-500 mt-1 leading-relaxed">{report.description}</p>
-              </div>
-            </div>
-
-            {report.needsDept && (
-              <div className="mb-4">
-                {deptLoading ? (
-                  <Skeleton className="h-[44px] w-full" />
-                ) : (
-                  <Select
-                    label="Department"
-                    options={departments.map((d) => ({ label: d.name, value: d.id }))}
-                    placeholder="Select department"
-                    value={selectedDept}
-                    onChange={(e) => setSelectedDept(e.target.value)}
-                  />
-                )}
-              </div>
-            )}
-
-            <div className="mt-auto pt-2">
-              <Button
-                variant="secondary"
-                className="w-full"
-                loading={downloadingType === report.type}
-                disabled={report.needsDept && !selectedDept}
-                onClick={() => handleDownload(report.type)}
-              >
-                <Download size={14} />
-                Download CSV
+        <FilterToolbar
+          search={
+            <Select
+              label="Department"
+              placeholder="All departments"
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              options={deptOptions}
+              className="w-64"
+            />
+          }
+          filters={
+            deptFilter !== '' ? (
+              <Button variant="ghost" size="sm" onClick={() => setDeptFilter('')}>
+                <FilterX size={14} />
+                Clear filter
               </Button>
+            ) : undefined
+          }
+        >
+          <Dropdown
+            trigger={
+              <Button loading={exporting !== null}>
+                <Download size={14} />
+                {exporting === 'students'
+                  ? 'Exporting students...'
+                  : exporting === 'placement'
+                    ? 'Exporting report...'
+                    : 'Export CSV'}
+              </Button>
+            }
+            items={exportItems}
+          />
+        </FilterToolbar>
+
+        {error ? (
+          <ErrorState
+            title="Unable to load reports"
+            message={`Could not load report data. ${error}`}
+            onRetry={handleRetry}
+          />
+        ) : loading ? (
+          <div className="space-y-6">
+            <MetricsSkeleton />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Skeleton className="h-[340px] rounded-[14px]" />
+              <Skeleton className="h-[340px] lg:col-span-2 rounded-[14px]" />
             </div>
-          </Card>
+          </div>
+        ) : stats.totalStudents === 0 ? (
+          <EmptyState
+            icon={<BarChart3 size={40} />}
+            title="No placement report data available"
+            description="Reports will appear here once student profiles and placement data exist."
+          />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <MetricCard
+                label="Total Students"
+                value={prettyNumber(stats.totalStudents)}
+                icon={Users}
+                sub={`${prettyNumber(stats.interested)} interested in placement`}
+                href="/students"
+              />
+              <MetricCard
+                label="Placement Rate"
+                value={`${stats.rate}%`}
+                icon={GraduationCap}
+                sub={`${prettyNumber(stats.placed)} of ${prettyNumber(stats.totalStudents)} placed`}
+                href="/students"
+              />
+              <MetricCard
+                label="Active Drives"
+                value={prettyNumber(stats.activeDrives)}
+                icon={Briefcase}
+                sub={`${prettyNumber(stats.completedDrives)} completed`}
+                href="/placement-drives"
+              />
+              <MetricCard
+                label="Companies"
+                value={prettyNumber(stats.activeCompanies)}
+                icon={Building2}
+                sub="active companies"
+                href="/companies"
+              />
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Card title="Placement Overview" subtitle="Placed vs not placed across students" padding="none">
+                <div className="p-6 min-h-[280px]">
+                  <PlacementDonut
+                    segments={stats.statusSegments}
+                    total={stats.totalStudents}
+                    placed={stats.placed}
+                    rate={stats.rate}
+                  />
+                </div>
+              </Card>
+
+              <Card
+                title="Department Performance"
+                subtitle="Placement outcomes by department"
+                padding="none"
+                className="lg:col-span-2"
+              >
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[14px]">
+                    <thead>
+                      <tr className="border-b border-neutral-200/80 bg-primary-50/30">
+                        <Th>Department</Th>
+                        <Th className="text-right">Students</Th>
+                        <Th className="text-right">Interested</Th>
+                        <Th className="text-right">Placed</Th>
+                        <Th className="w-56">Placement %</Th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100/60">
+                      {stats.byDept.map((d) => (
+                        <tr key={d.id} className="hover:bg-neutral-50/60 transition-colors">
+                          <td className="px-5 py-3.5 font-medium text-neutral-900 whitespace-nowrap">
+                            {d.name}
+                          </td>
+                          <Td className="text-right">{prettyNumber(d.students)}</Td>
+                          <Td className="text-right">{prettyNumber(d.interested)}</Td>
+                          <Td className="text-right font-medium text-success-700">
+                            {prettyNumber(d.placed)}
+                          </Td>
+                          <td className="px-5 py-3.5">
+                            <RateBar rate={d.rate} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {stats.byDept.length === 0 && (
+                    <div className="px-5 py-8 text-center text-[14px] text-neutral-500">
+                      No student profiles in {selectedDeptName || 'the selected scope'}.
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+
+            <div className="mt-6">
+              <Card title="Placement Summary by Batch" subtitle="Year-wise placement outcomes" padding="none">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[14px]">
+                    <thead>
+                      <tr className="border-b border-neutral-200/80 bg-primary-50/30">
+                        <Th>Batch</Th>
+                        <Th className="text-right">Students</Th>
+                        <Th className="text-right">Interested</Th>
+                        <Th className="text-right">Placed</Th>
+                        <Th className="w-56">Placement %</Th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100/60">
+                      {stats.byBatch.map((b) => (
+                        <tr key={b.batch} className="hover:bg-neutral-50/60 transition-colors">
+                          <td className="px-5 py-3.5 font-medium text-neutral-900 whitespace-nowrap">
+                            {b.batch}
+                          </td>
+                          <Td className="text-right">{prettyNumber(b.students)}</Td>
+                          <Td className="text-right">{prettyNumber(b.interested)}</Td>
+                          <Td className="text-right font-medium text-success-700">
+                            {prettyNumber(b.placed)}
+                          </Td>
+                          <td className="px-5 py-3.5">
+                            <RateBar rate={b.rate} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {stats.byBatch.length === 0 && (
+                    <div className="px-5 py-8 text-center text-[14px] text-neutral-500">
+                      No student profiles in {selectedDeptName || 'the selected scope'}.
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+          </>
+        )}
+      </PageContainer>
+    </div>
+  );
+}
+
+function PlacementDonut({
+  segments,
+  total,
+  placed,
+  rate,
+}: {
+  segments: StatusSegment[];
+  total: number;
+  placed: number;
+  rate: number;
+}) {
+  const radius = 40;
+  const stroke = 12;
+  const circumference = 2 * Math.PI * radius;
+
+  const arcs = segments.reduce<{
+    key: string;
+    color: string;
+    label: string;
+    count: number;
+    dash: number;
+    offset: number;
+  }[]>((acc, seg) => {
+    const fraction = seg.count / total;
+    const dash = fraction * circumference;
+    const offset = acc.length ? acc[acc.length - 1].offset - acc[acc.length - 1].dash : 0;
+    acc.push({ key: seg.key, color: seg.color, label: seg.label, count: seg.count, dash, offset });
+    return acc;
+  }, []);
+
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-4 h-full w-full">
+      <svg width="180" height="180" viewBox="0 0 100 100" className="shrink-0">
+        <circle cx="50" cy="50" r={radius} fill="none" stroke="#f4f4f5" strokeWidth={stroke} />
+        <g transform="rotate(-90 50 50)">
+          {arcs.map((a) => (
+            <circle
+              key={a.key}
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              stroke={a.color}
+              strokeWidth={stroke}
+              strokeDasharray={`${a.dash} ${circumference - a.dash}`}
+              strokeDashoffset={a.offset}
+            />
+          ))}
+        </g>
+        <text
+          x="50"
+          y="47"
+          textAnchor="middle"
+          className="fill-neutral-900"
+          fontSize="16"
+          fontWeight="700"
+        >
+          {prettyNumber(placed)}
+        </text>
+        <text x="50" y="60" textAnchor="middle" className="fill-neutral-400" fontSize="5.5">
+          placed
+        </text>
+      </svg>
+      <div className="space-y-3">
+        {segments.map((seg) => (
+          <div key={seg.key} className="flex items-center gap-2.5">
+            <span
+              className="w-2.5 h-2.5 rounded-[4px] shrink-0"
+              style={{ backgroundColor: seg.color }}
+            />
+            <span className="text-[13px] text-neutral-600">{seg.label}</span>
+            <span className="text-[13px] font-semibold text-neutral-900 tabular-nums">
+              {prettyNumber(seg.count)}
+            </span>
+            <span className="text-[12px] text-neutral-400 tabular-nums">
+              {total ? Math.round((seg.count / total) * 1000) / 10 : 0}%
+            </span>
+          </div>
         ))}
+        <div className="pt-2 border-t border-neutral-100">
+          <span className="text-[13px] font-medium text-neutral-600">
+            Placement rate:{' '}
+            <span className="font-bold text-success-700 tabular-nums">{rate}%</span>
+          </span>
+        </div>
       </div>
-    </PageContainer>
+    </div>
+  );
+}
+
+function RateBar({ rate }: { rate: number }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="h-1.5 flex-1 rounded-full bg-neutral-100 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${rate}%`,
+            backgroundColor: rate > 0 ? '#059669' : '#d4d4d8',
+          }}
+        />
+      </div>
+      <span className="text-[12.5px] font-semibold text-neutral-600 w-12 text-right tabular-nums">
+        {rate}%
+      </span>
+    </div>
+  );
+}
+
+function Th({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <th
+      className={`px-5 py-3.5 text-left text-[12px] font-semibold uppercase tracking-[0.05em] text-neutral-500 whitespace-nowrap ${className}`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <td className={`px-5 py-3.5 text-neutral-700 whitespace-nowrap ${className}`}>{children}</td>
   );
 }

@@ -84,6 +84,9 @@ export interface StudentProfile {
   placementInterested: boolean | null;
   placementStatus: string | null;
   interviewsAttended: number | null;
+  placedCompanyId: number | null;
+  placedCompanyName: string | null;
+  packageLpa: number | null;
 }
 
 export interface Company {
@@ -164,6 +167,9 @@ export interface StudentInterview {
   attended: boolean | null;
   remarks: string | null;
   interviewDate: string | null;
+  driveDate: string | null;
+  driveLocation: string | null;
+  packageLpa: number | null;
 }
 
 export interface UserStats {
@@ -171,4 +177,14 @@ export interface UserStats {
   activeStudents: number;
   totalPcs: number;
   totalPrs: number;
+}
+
+export interface AuditLog {
+  id: number;
+  userEmail: string;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  details: string | null;
+  createdAt: string;
 }

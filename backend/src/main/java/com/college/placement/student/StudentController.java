@@ -7,7 +7,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,18 +19,17 @@ public class StudentController {
     private final StudentService studentService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<PaginatedResponse<StudentProfileResponse>>> searchStudents(
+    public ResponseEntity<ApiResponse<PaginatedResponse<?>>> searchStudents(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long departmentId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        Page<StudentProfileResponse> result = studentService.searchStudents(
-                search, departmentId,
-                PageRequest.of(page, size, Sort.by("register_number").ascending()));
+        Page<?> result = studentService.searchStudents(
+                search, departmentId, PageRequest.of(page, size));
 
-        PaginatedResponse<StudentProfileResponse> paginated = PaginatedResponse.<StudentProfileResponse>builder()
-                .content(result.getContent())
+        PaginatedResponse<?> paginated = PaginatedResponse.<Object>builder()
+                .content(new java.util.ArrayList<>(result.getContent()))
                 .page(result.getNumber())
                 .size(result.getSize())
                 .totalElements(result.getTotalElements())
@@ -49,12 +47,12 @@ public class StudentController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<StudentProfileResponse>> getStudentById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Object>> getStudentById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(studentService.getStudentById(id)));
     }
 
     @GetMapping("/by-user/{userId}")
-    public ResponseEntity<ApiResponse<StudentProfileResponse>> getStudentByUserId(@PathVariable Long userId) {
+    public ResponseEntity<ApiResponse<Object>> getStudentByUserId(@PathVariable Long userId) {
         return ResponseEntity.ok(ApiResponse.success(studentService.getStudentByUserId(userId)));
     }
 
@@ -68,21 +66,21 @@ public class StudentController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<StudentProfileResponse>> updateProfile(
             @PathVariable Long id,
-            @RequestBody UpdateStudentProfileRequest request) {
+            @Valid @RequestBody UpdateStudentProfileRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Profile updated", studentService.updateProfile(id, request)));
     }
 
     @PutMapping("/{id}/academic")
     public ResponseEntity<ApiResponse<StudentProfileResponse>> updateAcademic(
             @PathVariable Long id,
-            @RequestBody UpdateAcademicRequest request) {
+            @Valid @RequestBody UpdateAcademicRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Academic info updated", studentService.updateAcademic(id, request)));
     }
 
     @PutMapping("/{id}/professional")
     public ResponseEntity<ApiResponse<StudentProfileResponse>> updateProfessional(
             @PathVariable Long id,
-            @RequestBody UpdateProfessionalRequest request) {
+            @Valid @RequestBody UpdateProfessionalRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Professional info updated", studentService.updateProfessional(id, request)));
     }
 }

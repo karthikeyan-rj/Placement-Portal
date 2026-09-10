@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
   X,
   ChevronLeft,
@@ -27,11 +28,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 shadow-soft',
+    'bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 shadow-soft hover:shadow-card hover:-translate-y-px',
   secondary:
-    'bg-white text-neutral-700 border border-border hover:bg-neutral-50 hover:text-neutral-900 active:bg-neutral-100',
+    'glass text-neutral-700 hover:bg-white/90 hover:text-neutral-900 active:bg-neutral-100',
   ghost:
-    'bg-transparent text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800 active:bg-neutral-200',
+    'bg-transparent text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-800 active:bg-neutral-200/60',
   danger:
     'bg-danger-500 text-white hover:bg-danger-600 active:bg-danger-700 shadow-soft',
   'outline-danger':
@@ -39,9 +40,9 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3.5 text-[13px] font-medium gap-1.5',
-  md: 'h-[44px] px-5 text-[14px] font-semibold gap-2',
-  lg: 'h-[48px] px-7 text-[15px] font-semibold gap-2',
+  sm: 'h-[36px] px-3.5 text-[13px] font-medium gap-1.5 rounded-[10px]',
+  md: 'h-[44px] px-5 text-[14px] font-semibold gap-2 rounded-[10px]',
+  lg: 'h-[50px] px-7 text-[15px] font-semibold gap-2.5 rounded-[12px]',
 };
 
 export function Button({
@@ -50,12 +51,14 @@ export function Button({
   loading = false,
   className = '',
   disabled,
+  type = 'button',
   children,
   ...props
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-[8px] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none whitespace-nowrap select-none focus-visible:ring-[3px] focus-visible:ring-primary/25 focus-visible:outline-none ${
+      type={type}
+      className={`inline-flex items-center justify-center transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none whitespace-nowrap select-none focus-visible:ring-[3px] focus-visible:ring-primary-500/20 focus-visible:outline-none ${
         !disabled && !loading ? 'active:scale-[0.985]' : ''
       } ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       disabled={disabled || loading}
@@ -82,15 +85,16 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
   active?: boolean;
 }
 
-export function IconButton({ label, children, active, className = '', ...props }: IconButtonProps) {
+export function IconButton({ label, children, active, className = '', type = 'button', ...props }: IconButtonProps) {
   return (
     <button
+      type={type}
       title={label}
       aria-label={label}
-      className={`inline-flex items-center justify-center h-9 w-9 rounded-[8px] transition-colors duration-150 ${
+      className={`inline-flex items-center justify-center h-9 w-9 rounded-[10px] transition-all duration-150 ${
         active
           ? 'text-primary-600 bg-primary-50'
-          : 'text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100'
+          : 'text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/80'
       } ${className}`}
       {...props}
     >
@@ -101,7 +105,6 @@ export function IconButton({ label, children, active, className = '', ...props }
 
 /* ═══════════════════════════════════════════════════════════════
    Field wrapper + Input / Select / Textarea
-   Shared: no tiny uppercase labels => 14px, 500. Controlled H-pad.
    ═══════════════════════════════════════════════════════════════ */
 
 function FieldLabel({
@@ -116,7 +119,7 @@ function FieldLabel({
   return (
     <label
       htmlFor={htmlFor}
-      className="block text-[14px] font-medium text-neutral-800 mb-2"
+      className="block text-[14px] font-medium text-neutral-600 mb-1.5"
     >
       {children}
       {required && <span className="text-danger-500 ml-0.5">*</span>}
@@ -125,12 +128,13 @@ function FieldLabel({
 }
 
 const controlBase =
-  'w-full h-[46px] px-4 text-[15px] border rounded-[8px] bg-white text-neutral-900 ' +
-  'placeholder:text-neutral-400 focus:outline-none focus:border-primary-500 ' +
-  'focus:ring-[3px] focus:ring-primary/15 hover:border-neutral-300 ' +
-  'transition-colors duration-150 disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed';
+  'w-full h-[48px] px-4 text-[15px] rounded-[10px] bg-white text-neutral-900 ' +
+  'border border-neutral-200/80 placeholder:text-neutral-400 ' +
+  'focus:outline-none focus:border-primary-400 focus:ring-[3px] focus:ring-primary-500/10 ' +
+  'hover:border-neutral-300 transition-all duration-150 ' +
+  'disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed';
 
-const controlError = 'border-danger-500 focus:border-danger-500 focus:ring-danger/15';
+const controlError = 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/10';
 
 function FieldShell({
   label,
@@ -153,7 +157,7 @@ function FieldShell({
         </FieldLabel>
       )}
       {children}
-      {error && <p className="mt-1.5 text-[13px] text-danger-600">{error}</p>}
+      {error && <p className="mt-1.5 text-[12.5px] text-danger-600">{error}</p>}
     </div>
   );
 }
@@ -223,7 +227,7 @@ interface SearchInputProps extends Omit<InputProps, 'icon'> {
 export function SearchInput({ className = '', ...props }: SearchInputProps) {
   return (
     <Input
-      icon={<Search size={18} className="text-neutral-400" />}
+      icon={<Search size={16} className="text-neutral-400" />}
       placeholder="Search..."
       className={className}
       {...props}
@@ -256,17 +260,19 @@ export function Select({
   ...props
 }: SelectProps) {
   const selectId = id || label?.toLowerCase().replace(/\s+/g, '-');
+  const accessibleLabel = label ? undefined : props['aria-label'] || placeholder || undefined;
   return (
     <FieldShell label={label} error={error} required={required} controlId={selectId}>
       <select
         id={selectId}
+        aria-label={accessibleLabel}
         required={required}
         className={`${controlBase} appearance-none pr-10 bg-no-repeat bg-[right_14px_center] ${
           error ? controlError : ''
         } ${className}`}
         style={{
           backgroundImage:
-            "url(\"data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235B6470' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+            "url(\"data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
         }}
         {...props}
       >
@@ -298,8 +304,8 @@ export function Textarea({ label, error, required, className = '', id, ...props 
     <FieldShell label={label} error={error} required={required} controlId={textareaId}>
       <textarea
         id={textareaId}
-        required={required}
-        className={`w-full px-4 py-3 text-[15px] border rounded-[8px] bg-white text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-primary-500 focus:ring-[3px] focus:ring-primary/15 hover:border-neutral-300 transition-colors duration-150 resize-y min-h-[120px] leading-[1.55] ${
+        required
+        className={`w-full px-4 py-3 text-[15px] rounded-[10px] bg-white text-neutral-900 border border-neutral-200/80 placeholder:text-neutral-400 focus:outline-none focus:border-primary-400 focus:ring-[3px] focus:ring-primary-500/10 hover:border-neutral-300 transition-all duration-150 resize-y min-h-[120px] leading-relaxed ${
           error ? controlError : ''
         } ${className}`}
         {...props}
@@ -324,13 +330,13 @@ interface BadgeProps {
 }
 
 const badgeClasses: Record<BadgeVariant, string> = {
-  success: 'bg-success-50 text-success-700 ring-success-600/15',
-  warning: 'bg-warning-50 text-warning-700 ring-warning-600/20',
-  danger: 'bg-danger-50 text-danger-700 ring-danger-600/20',
-  info: 'bg-info-50 text-info-600 ring-info-600/20',
+  success: 'bg-success-50 text-success-700 ring-success-500/15',
+  warning: 'bg-warning-50 text-warning-700 ring-warning-500/20',
+  danger: 'bg-danger-50 text-danger-700 ring-danger-500/20',
+  info: 'bg-info-50 text-info-600 ring-info-500/20',
   neutral: 'bg-neutral-100 text-neutral-600 ring-neutral-500/15',
-  teal: 'bg-primary-50 text-primary-700 ring-primary-600/20',
-  department: 'bg-info-100 text-brand-navy ring-info-500/20',
+  teal: 'bg-primary-50 text-primary-600 ring-primary-500/20',
+  department: 'bg-accent-50 text-accent-500 ring-accent-400/20',
 };
 
 const dotColors: Record<BadgeVariant, string> = {
@@ -340,12 +346,12 @@ const dotColors: Record<BadgeVariant, string> = {
   info: 'bg-info-500',
   neutral: 'bg-neutral-400',
   teal: 'bg-primary-500',
-  department: 'bg-brand-navy',
+  department: 'bg-accent-400',
 };
 
 const badgeSizes: Record<BadgeSize, string> = {
   sm: 'px-2 py-0.5 text-[12px] gap-1',
-  md: 'px-2.5 py-1 text-[13px] font-medium gap-1.5',
+  md: 'px-2.5 py-[5px] text-[12.5px] font-medium gap-1.5',
 };
 
 export function Badge({
@@ -379,6 +385,7 @@ interface CardProps {
   subtitle?: string;
   icon?: ReactNode;
   action?: ReactNode;
+  glass?: boolean;
 }
 
 const paddingClasses = {
@@ -398,18 +405,20 @@ export function Card({
   subtitle,
   icon,
   action,
+  glass = false,
 }: CardProps) {
   const hasHeader = header !== undefined || title !== undefined;
+  const glassClass = glass ? 'glass' : 'bg-white';
   return (
-    <div className={`bg-white rounded-[12px] border border-border shadow-card ${className}`}>
+    <div className={`${glassClass} rounded-[14px] border ${glass ? 'border-white/40' : 'border-neutral-200/60'} shadow-card ${className}`}>
       {hasHeader && (
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-neutral-100">
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-neutral-100/80">
           {header}
           {title !== undefined && (
             <div className="flex items-center gap-3 min-w-0">
-              {icon && <span className="shrink-0 text-primary-600">{icon}</span>}
+              {icon && <span className="shrink-0 text-primary-500">{icon}</span>}
               <div className="min-w-0">
-                <h3 className="text-[16px] font-semibold text-neutral-900 truncate">
+                <h3 className="text-[15px] font-semibold text-neutral-900 truncate">
                   {title}
                 </h3>
                 {subtitle && (
@@ -423,7 +432,7 @@ export function Card({
       )}
       <div className={paddingClasses[padding]}>{children}</div>
       {footer && (
-        <div className="px-5 py-3.5 border-t border-neutral-100 bg-neutral-50/60 rounded-b-[12px]">
+        <div className="px-5 py-3.5 border-t border-neutral-100/80 bg-neutral-50/50 rounded-b-[14px]">
           {footer}
         </div>
       )}
@@ -432,7 +441,7 @@ export function Card({
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   StatCard — neutral white, small brand indicator
+   StatCard
    ═══════════════════════════════════════════════════════════════ */
 
 interface StatCardProps {
@@ -444,28 +453,28 @@ interface StatCardProps {
 }
 
 const statAccent: Record<string, string> = {
-  teal: 'bg-primary-50 text-primary-600',
-  info: 'bg-info-50 text-info-500',
-  navy: 'bg-brand-navy-50 text-brand-navy',
+  teal: 'bg-primary-50 text-primary-500',
+  info: 'bg-accent-50 text-accent-400',
+  navy: 'bg-brand-navy-50 text-neutral-800',
   none: 'bg-neutral-100 text-neutral-600',
 };
 
 export function StatCard({ label, value, icon, sub, accent = 'none' }: StatCardProps) {
   const chip = statAccent[accent] || statAccent.none;
   return (
-    <div className="bg-white rounded-[12px] border border-border shadow-card p-5 flex flex-col gap-4 transition-shadow duration-150 hover:shadow-raised">
+    <div className="glass rounded-[14px] border border-white/40 p-5 flex flex-col gap-3 transition-all duration-200 hover:shadow-raised hover:-translate-y-px">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[13px] font-medium text-neutral-500 leading-tight">{label}</p>
         {icon && (
-          <span className={`shrink-0 flex items-center justify-center w-9 h-9 rounded-[8px] ${chip}`}>
+          <span className={`shrink-0 flex items-center justify-center w-9 h-9 rounded-[10px] ${chip}`}>
             {icon}
           </span>
         )}
       </div>
-      <p className="text-[30px] font-bold leading-none text-neutral-900 tracking-tight">
+      <p className="text-[28px] font-bold leading-none text-neutral-900 tracking-tight">
         {typeof value === 'number' ? value.toLocaleString() : value}
       </p>
-      {sub && <div className="text-[13px] text-neutral-500 flex items-center gap-1.5 -mt-2">{sub}</div>}
+      {sub && <div className="text-[13px] text-neutral-500 flex items-center gap-1.5 -mt-1">{sub}</div>}
     </div>
   );
 }
@@ -518,20 +527,21 @@ export function Modal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-brand-navy/50" onClick={onClose} />
+      <div className="fixed inset-0 bg-dark/40 backdrop-blur-sm" onClick={onClose} />
       <div
-        className={`relative bg-white rounded-[16px] border border-neutral-200/60 shadow-overlay w-full ${modalSizeClasses[size]} animate-fadeInScale`}
+        className={`relative glass-strong rounded-[20px] border border-white/50 shadow-overlay w-full ${modalSizeClasses[size]} animate-fadeInScale`}
       >
-        <div className="flex items-start justify-between px-6 py-5 border-b border-neutral-100">
+        <div className="flex items-start justify-between px-6 py-5 border-b border-neutral-100/60">
           <div className="pr-4">
-            <h2 className="text-[20px] font-semibold text-neutral-900 leading-tight">{title}</h2>
+            <h2 className="text-[18px] font-semibold text-neutral-900 leading-tight">{title}</h2>
             {description && (
               <p className="mt-1 text-[14px] text-neutral-500 leading-relaxed">{description}</p>
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 -m-1 rounded-[8px] text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+            className="p-1.5 -m-1 rounded-[10px] text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors"
             aria-label="Close"
           >
             <X size={18} />
@@ -539,7 +549,7 @@ export function Modal({
         </div>
         <div className="px-6 py-6 max-h-[70vh] overflow-y-auto">{children}</div>
         {actions && (
-          <div className="px-6 py-4 border-t border-neutral-100 flex items-center justify-end gap-3 bg-neutral-50/60 rounded-b-[16px]">
+          <div className="px-6 py-4 border-t border-neutral-100/60 flex items-center justify-end gap-3 bg-neutral-50/40 rounded-b-[20px]">
             {actions}
           </div>
         )}
@@ -567,6 +577,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   emptyIcon?: ReactNode;
   loading?: boolean;
+  density?: 'comfortable' | 'compact';
 }
 
 export function DataTable<T>({
@@ -577,11 +588,12 @@ export function DataTable<T>({
   emptyMessage = 'No data found',
   emptyIcon,
   loading = false,
+  density = 'comfortable',
 }: DataTableProps<T>) {
   if (loading) {
     return (
-      <div className="bg-white rounded-[12px] border border-border overflow-hidden">
-        <div className="px-5 py-4 border-b border-neutral-100 flex gap-4">
+      <div className="bg-white rounded-[14px] border border-neutral-200/60 overflow-hidden">
+        <div className="px-5 py-4 border-b border-neutral-100/80 flex gap-4">
           {columns.map((col) => (
             <Skeleton key={col.key} className="h-3.5 flex-1" />
           ))}
@@ -589,7 +601,7 @@ export function DataTable<T>({
         {Array.from({ length: 5 }).map((_, rowIdx) => (
           <div
             key={rowIdx}
-            className="px-5 py-6 flex gap-4 border-b border-neutral-100 last:border-0"
+            className="px-5 py-6 flex gap-4 border-b border-neutral-100/60 last:border-0"
           >
             {columns.map((col) => (
               <Skeleton key={col.key} className="h-3.5 flex-1" />
@@ -602,7 +614,7 @@ export function DataTable<T>({
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-[12px] border border-border">
+      <div className="bg-white rounded-[14px] border border-neutral-200/60">
         <div className="py-16 flex flex-col items-center justify-center text-center px-4">
           {emptyIcon && <div className="mb-3 text-neutral-300">{emptyIcon}</div>}
           <p className="text-[15px] font-medium text-neutral-500">{emptyMessage}</p>
@@ -612,34 +624,36 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="bg-white rounded-[12px] border border-border overflow-hidden">
+    <div className="bg-white rounded-[14px] border border-neutral-200/60 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-[14px]">
           <thead>
-            <tr className="border-b border-neutral-200 bg-neutral-100/70">
+            <tr className="border-b border-neutral-200/80 bg-primary-50/30">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-5 py-3.5 text-left text-[12.5px] font-semibold uppercase tracking-[0.04em] text-neutral-500 whitespace-nowrap ${col.className || ''}`}
+                  className={`px-5 py-3.5 text-left text-[12px] font-semibold uppercase tracking-[0.05em] text-neutral-500 whitespace-nowrap ${col.className || ''}`}
                 >
                   {col.label}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
+          <tbody className="divide-y divide-neutral-100/60">
             {data.map((item, index) => (
               <tr
                 key={rowKey(item)}
                 onClick={() => onRowClick?.(item)}
-                className={`transition-colors duration-150 ${
-                  onRowClick ? 'cursor-pointer hover:bg-primary-50/30' : 'hover:bg-neutral-50/60'
-                } ${index % 2 === 1 ? 'bg-neutral-50/30' : 'bg-white'}`}
+                className={`transition-colors duration-120 ${
+                  onRowClick ? 'cursor-pointer hover:bg-primary-50/20' : 'hover:bg-neutral-50/60'
+                } ${index % 2 === 1 ? 'bg-neutral-50/20' : 'bg-white'}`}
               >
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-5 py-[22px] align-middle text-neutral-700 ${col.className || ''}`}
+                    className={`px-5 ${
+                      density === 'compact' ? 'py-[11px]' : 'py-[20px]'
+                    } align-middle text-neutral-700 ${col.className || ''}`}
                   >
                     {col.render
                       ? col.render(item, index)
@@ -680,7 +694,7 @@ export function Pagination({
   const end = Math.min((page + 1) * pageSize, totalElements);
 
   return (
-    <div className="flex items-center justify-between gap-4 flex-wrap bg-white rounded-[12px] border border-border px-4 py-2.5 text-[14px]">
+    <div className="flex items-center justify-between gap-4 flex-wrap glass rounded-[14px] border border-white/40 px-4 py-2.5 text-[14px]">
       <span className="text-neutral-500">
         Showing <span className="font-medium text-neutral-800">{start}</span>
         {' – '}
@@ -689,9 +703,10 @@ export function Pagination({
       </span>
       <div className="flex items-center gap-0.5">
         <button
+          type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 0}
-          className="p-1.5 rounded-[8px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-[10px] text-neutral-500 hover:bg-neutral-100/80 hover:text-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Previous page"
         >
           <ChevronLeft size={16} />
@@ -711,11 +726,12 @@ export function Pagination({
             ) : (
               <button
                 key={item}
+                type="button"
                 onClick={() => onPageChange(item)}
-                className={`min-w-[32px] h-8 rounded-[8px] text-[14px] font-medium transition-colors duration-150 ${
+                className={`min-w-[32px] h-8 rounded-[10px] text-[14px] font-medium transition-all duration-150 ${
                   item === page
-                    ? 'bg-primary-500 text-white'
-                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800'
+                    ? 'bg-primary-500 text-white shadow-soft'
+                    : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-800'
                 }`}
               >
                 {item + 1}
@@ -723,9 +739,10 @@ export function Pagination({
             )
           )}
         <button
+          type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages - 1}
-          className="p-1.5 rounded-[8px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-[10px] text-neutral-500 hover:bg-neutral-100/80 hover:text-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Next page"
         >
           <ChevronRight size={16} />
@@ -745,7 +762,7 @@ interface SkeletonProps {
 }
 
 export function Skeleton({ className = '', style }: SkeletonProps) {
-  return <div style={style} className={`skeleton rounded-[8px] ${className}`} />;
+  return <div style={style} className={`skeleton rounded-[10px] ${className}`} />;
 }
 
 Skeleton.Text = function SkeletonText({ lines = 3 }: { lines?: number }) {
@@ -764,7 +781,7 @@ Skeleton.Circle = function SkeletonCircle({ size = 40 }: { size?: number }) {
 
 Skeleton.Card = function SkeletonCard() {
   return (
-    <div className="bg-white rounded-[12px] border border-border p-5 space-y-3">
+    <div className="bg-white rounded-[14px] border border-neutral-200/60 p-5 space-y-3">
       <Skeleton className="h-4 w-1/3" />
       <Skeleton.Text lines={2} />
       <Skeleton className="h-8 w-24 mt-3" />
@@ -774,14 +791,14 @@ Skeleton.Card = function SkeletonCard() {
 
 Skeleton.Table = function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="bg-white rounded-[12px] border border-border overflow-hidden">
-      <div className="px-5 py-4 border-b border-neutral-100 flex gap-4">
+    <div className="bg-white rounded-[14px] border border-neutral-200/60 overflow-hidden">
+      <div className="px-5 py-4 border-b border-neutral-100/80 flex gap-4">
         {Array.from({ length: cols }).map((_, i) => (
           <Skeleton key={i} className="h-3.5 flex-1" />
         ))}
       </div>
       {Array.from({ length: rows }).map((_, rowIdx) => (
-        <div key={rowIdx} className="px-5 py-6 flex gap-4 border-b border-neutral-100 last:border-0">
+        <div key={rowIdx} className="px-5 py-6 flex gap-4 border-b border-neutral-100/60 last:border-0">
           {Array.from({ length: cols }).map((_, colIdx) => (
             <Skeleton key={colIdx} className="h-3.5 flex-1" />
           ))}
@@ -806,11 +823,11 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
   return (
     <div className="flex flex-col items-center justify-center py-14 px-4 text-center">
       {icon && (
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[12px] bg-neutral-100 text-neutral-400">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[14px] bg-neutral-100/80 text-neutral-400">
           {icon}
         </div>
       )}
-      <h3 className="text-[17px] font-semibold text-neutral-800">{title}</h3>
+      <h3 className="text-[16px] font-semibold text-neutral-800">{title}</h3>
       {description && (
         <p className="mt-1.5 text-[14px] text-neutral-500 max-w-sm leading-relaxed">{description}</p>
       )}
@@ -827,12 +844,12 @@ interface ErrorStateProps {
 
 export function ErrorState({ title = 'Unable to load data', message, onRetry }: ErrorStateProps) {
   return (
-    <div className="bg-white rounded-[12px] border border-border p-8">
+    <div className="rounded-[16px] border border-danger-100 bg-danger-50/50 p-8">
       <div className="flex flex-col items-center justify-center text-center">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-50 text-danger-500 ring-1 ring-inset ring-danger-600/20">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-100 text-danger-500">
           <AlertCircle size={24} />
         </div>
-        <h3 className="text-[17px] font-semibold text-neutral-900">{title}</h3>
+        <h3 className="text-[16px] font-semibold text-neutral-900">{title}</h3>
         {message && (
           <p className="mt-1.5 text-[14px] text-neutral-500 max-w-md leading-relaxed">{message}</p>
         )}
@@ -853,8 +870,7 @@ export function ErrorState({ title = 'Unable to load data', message, onRetry }: 
 export const notify = {
   success: (m: string) => toast.success(m, { duration: 3000 }),
   error: (m: string) => toast.error(m, { duration: 4000 }),
-  info: (m: string) =>
-    toast(m, { icon: 'ℹ️', duration: 3000 }),
+  info: (m: string) => toast(m, { icon: 'ℹ️', duration: 3000 }),
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -982,19 +998,20 @@ export function Dropdown({ items, trigger }: DropdownProps) {
         className="cursor-pointer outline-none"
       >
         {trigger || (
-          <button className="p-1.5 rounded-[8px] text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors">
+          <button type="button" aria-label="Row actions" className="p-1.5 rounded-[10px] text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100/80 transition-colors">
             <MoreHorizontal size={17} />
           </button>
         )}
       </div>
       {open && (
         <div
-          className="absolute right-0 z-40 mt-1 w-48 bg-white rounded-[10px] border border-border shadow-raised py-1.5 animate-fadeIn"
+          className="absolute right-0 z-40 mt-1.5 w-48 glass-strong rounded-[12px] border border-white/40 shadow-overlay py-1.5 animate-slideDown"
           role="menu"
         >
           {items.map((item, i) => (
             <button
               key={i}
+              type="button"
               ref={(el) => {
                 itemRefs.current[i] = el;
               }}
@@ -1004,11 +1021,11 @@ export function Dropdown({ items, trigger }: DropdownProps) {
               }}
               role="menuitem"
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 my-0.5 text-[14px] text-left transition-colors outline-none ${
-                i === activeIndex ? 'bg-neutral-50' : ''
+                i === activeIndex ? 'bg-neutral-100/80' : ''
               } ${
                 item.danger
                   ? 'text-danger-600 hover:bg-danger-50'
-                  : 'text-neutral-700 hover:bg-neutral-50'
+                  : 'text-neutral-700 hover:bg-neutral-100/60'
               }`}
             >
               {item.icon && (
@@ -1039,11 +1056,11 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
     <div className="flex items-start justify-between gap-4 mb-8 flex-wrap">
       <div className="min-w-0">
-        <h1 className="text-[28px] font-bold tracking-[-0.02em] leading-[1.2] text-neutral-900">
+        <h1 className="text-[28px] font-bold tracking-[-0.025em] leading-[1.15] text-neutral-900">
           {title}
         </h1>
         {description && (
-          <p className="mt-2 text-[15px] leading-relaxed text-neutral-500 max-w-2xl">
+          <p className="mt-1.5 text-[14.5px] leading-relaxed text-neutral-500 max-w-2xl">
             {description}
           </p>
         )}
@@ -1080,6 +1097,152 @@ export function FilterToolbar({ search, filters, children }: FilterToolbarProps)
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Avatar
+   ═══════════════════════════════════════════════════════════════ */
+
+type AvatarSize = 'xs' | 'sm' | 'md' | 'lg';
+
+interface AvatarProps {
+  name: string;
+  size?: AvatarSize;
+  className?: string;
+}
+
+const avatarSizes: Record<AvatarSize, string> = {
+  xs: 'h-7 w-7 text-[11px]',
+  sm: 'h-9 w-9 text-[13px]',
+  md: 'h-10 w-10 text-[14px]',
+  lg: 'h-14 w-14 text-[18px]',
+};
+
+export function Avatar({ name, size = 'md', className = '' }: AvatarProps) {
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+  return (
+    <div
+      className={`flex items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white font-semibold shrink-0 ${avatarSizes[size]} ${className}`}
+    >
+      {initials || 'U'}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Breadcrumb
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface BreadcrumbSegment {
+  label: string;
+  path?: string;
+}
+
+interface BreadcrumbProps {
+  segments: BreadcrumbSegment[];
+}
+
+export function Breadcrumb({ segments }: BreadcrumbProps) {
+  return (
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-[14px] min-w-0">
+      {segments.map((seg, i) => {
+        const isLast = i === segments.length - 1;
+        return (
+          <span key={i} className="flex items-center gap-1 min-w-0">
+            {i > 0 && <ChevronRight size={14} className="text-neutral-300 shrink-0" />}
+            {seg.path && !isLast ? (
+              <Link
+                to={seg.path}
+                className="text-neutral-400 hover:text-primary-500 transition-colors truncate"
+              >
+                {seg.label}
+              </Link>
+            ) : (
+              <span
+                className={`truncate ${isLast ? 'font-semibold text-neutral-700' : 'text-neutral-400'}`}
+              >
+                {seg.label}
+              </span>
+            )}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   formatStatus
+   ═══════════════════════════════════════════════════════════════ */
+
+const statusMap: Record<string, string> = {
+  NOT_PLACED: 'Not Placed',
+  PLACED: 'Placed',
+  IN_PROCESS: 'In Process',
+  ELIGIBLE: 'Eligible',
+  NOT_ELIGIBLE: 'Not Eligible',
+  PLACEMENT_INTERESTED: 'Placement Interested',
+  NOT_INTERESTED: 'Not Interested',
+  ACTIVE: 'Active',
+  INACTIVE: 'Inactive',
+  PENDING: 'Pending',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  SCHEDULED: 'Scheduled',
+  ONGOING: 'Ongoing',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+  UPCOMING: 'Upcoming',
+  REGISTRATION_OPEN: 'Registration Open',
+  REGISTRATION_CLOSED: 'Registration Closed',
+  INTERVIEW: 'Interview',
+  SHORTLISTED: 'Shortlisted',
+  NOT_SHORTLISTED: 'Not Shortlisted',
+  STUDENT: 'Student',
+  PLACEMENT_COORDINATOR: 'Placement Coordinator',
+  PLACEMENT_REPRESENTATIVE: 'Placement Representative',
+  PROGRAMME_ADMINISTRATOR: 'Programme Administrator',
+};
+
+export function formatStatus(value: string | null | undefined): string {
+  if (!value) return '—';
+  return statusMap[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function formatInterviewStatus(value: string | null | undefined): string {
+  if (!value) return '—';
+  const map: Record<string, string> = {
+    SCHEDULED: 'Scheduled',
+    ATTENDED: 'Attended',
+    PASSED: 'Passed',
+    REJECTED: 'Not Selected',
+    SELECTED: 'Selected',
+    WITHDRAWN: 'Withdrawn',
+  };
+  return map[value] || formatStatus(value);
+}
+
+export function interviewStatusVariant(status: string): BadgeVariant {
+  switch (status) {
+    case 'SELECTED':
+      return 'success';
+    case 'REJECTED':
+      return 'danger';
+    case 'ATTENDED':
+    case 'PASSED':
+      return 'warning';
+    case 'SCHEDULED':
+      return 'info';
+    case 'WITHDRAWN':
+    default:
+      return 'neutral';
+  }
+}
+
 interface TabsProps<T extends string> {
   tabs: { key: T; label: string }[];
   active: T;
@@ -1088,16 +1251,17 @@ interface TabsProps<T extends string> {
 
 export function Tabs<T extends string>({ tabs, active, onChange }: TabsProps<T>) {
   return (
-    <div className="flex items-center gap-1 mb-6 flex-wrap border-b border-neutral-200">
+    <div className="flex items-center gap-0.5 mb-6 flex-wrap border-b border-neutral-200/60">
       {tabs.map((tab) => {
         const isActive = active === tab.key;
         return (
           <button
             key={tab.key}
+            type="button"
             onClick={() => onChange(tab.key)}
-            className={`px-4 py-2.5 -mb-px border-b-2 text-[14px] font-medium transition-colors ${
+            className={`px-4 py-2.5 -mb-px border-b-2 text-[14px] font-medium transition-all duration-150 ${
               isActive
-                ? 'border-primary-500 text-primary-700'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
             }`}
           >

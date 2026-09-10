@@ -26,15 +26,15 @@ public class DepartmentService {
 
     @Transactional(readOnly = true)
     public List<DepartmentResponse> getAllDepartments() {
-        return departmentRepository.findAllByOrderByNameAsc().stream()
-                .map(this::toResponse)
+        return departmentRepository.findAllWithPrConfig().stream()
+                .map(row -> toResponse((Department) row[0], row[1] != null ? ((PrConfig) row[1]).getMaxPrs() : 5))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<DepartmentResponse> getActiveDepartments() {
-        return departmentRepository.findByActiveTrue().stream()
-                .map(this::toResponse)
+        return departmentRepository.findActiveWithPrConfig().stream()
+                .map(row -> toResponse((Department) row[0], row[1] != null ? ((PrConfig) row[1]).getMaxPrs() : 5))
                 .toList();
     }
 
@@ -140,11 +140,15 @@ public class DepartmentService {
 
     private DepartmentResponse toResponse(Department dept) {
         PrConfig prConfig = prConfigRepository.findByDepartmentId(dept.getId()).orElse(null);
+        return toResponse(dept, prConfig != null ? prConfig.getMaxPrs() : 5);
+    }
+
+    private DepartmentResponse toResponse(Department dept, int prLimit) {
         return DepartmentResponse.builder()
                 .id(dept.getId())
                 .name(dept.getName())
                 .active(dept.getActive())
-                .prLimit(prConfig != null ? prConfig.getMaxPrs() : 5)
+                .prLimit(prLimit)
                 .build();
     }
 }

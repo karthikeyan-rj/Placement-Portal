@@ -1,17 +1,42 @@
 import api from './axios';
+import { invalidate, cacheGet, cacheSet } from './cache';
+import type { ApiResponse, Department, StudentProfile, Company } from '../types';
+
+// Cache stable reference data (departments, companies, current user profile) in
+// memory, scoped by role+user, TTL 30s, invalidated on the relevant mutations.
+const REF_TTL = 30_000;
+
+// Return an AxiosResponse-shaped object so callers using `.data` are unchanged,
+// but serve from cache when a fresh entry exists.
+async function refGet<T>(url: string): Promise<{ data: T }> {
+  const cached = cacheGet<T>(url, {}, { ttl: REF_TTL });
+  if (cached !== undefined) return { data: cached };
+  const r = await api.get<T>(url);
+  cacheSet<T>(url, {}, r.data, REF_TTL);
+  return { data: r.data };
+}
+
+async function refList<T>(url: string, params: Record<string, unknown> = {}): Promise<{ data: T }> {
+  const keyParams = { size: 1000, ...params };
+  const cached = cacheGet<T>(url, keyParams, { ttl: REF_TTL });
+  if (cached !== undefined) return { data: cached };
+  const r = await api.get<T>(url, { params });
+  cacheSet<T>(url, keyParams, r.data, REF_TTL);
+  return { data: r.data };
+}
 
 // Auth
 export const authApi = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
   register: (data: {
-    name: string;
     registerNumber: string;
     email: string;
-    departmentId: number;
-    batch?: string;
+    accessCode: string;
     password: string;
   }) => api.post('/auth/register', data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/auth/change-password', { currentPassword, newPassword }),
 };
 
 // Public
@@ -26,31 +51,60 @@ export const userApi = {
   getAll: (params?: { search?: string; page?: number; size?: number }) =>
     api.get('/users', { params }),
   getById: (id: number) => api.get(`/users/${id}`),
-  create: (data: {
+  create: async (data: {
     name: string;
     email: string;
     password: string;
     role: string;
     departmentId?: number;
-  }) => api.post('/users', data),
-  assignPc: (userId: number, departmentId: number) =>
-    api.put(`/users/${userId}/assign-pc`, { departmentId }),
-  promotePr: (userId: number) => api.put(`/users/${userId}/promote-pr`),
-  demoteStudent: (userId: number) => api.put(`/users/${userId}/demote-student`),
+  }) => {
+    const r = await api.post('/users', data);
+    invalidate('/users');
+    return r;
+  },
+  assignPc: async (userId: number, departmentId: number) => {
+    const r = await api.put(`/users/${userId}/assign-pc`, { departmentId });
+    invalidate('/users', '/students', '/departments');
+    return r;
+  },
+  promotePr: async (userId: number) => {
+    const r = await api.put(`/users/${userId}/promote-pr`);
+    invalidate('/users', '/students');
+    return r;
+  },
+  demoteStudent: async (userId: number) => {
+    const r = await api.put(`/users/${userId}/demote-student`);
+    invalidate('/users', '/students');
+    return r;
+  },
   getStats: () => api.get('/users/stats'),
 };
 
 // Departments
 export const departmentApi = {
-  getAll: () => api.get('/departments'),
-  getActive: () => api.get('/departments/active'),
-  getById: (id: number) => api.get(`/departments/${id}`),
-  create: (data: { name: string }) => api.post('/departments', data),
-  update: (id: number, data: { name: string }) =>
-    api.put(`/departments/${id}`, data),
-  delete: (id: number) => api.delete(`/departments/${id}`),
-  updatePrLimit: (id: number, maxPrs: number) =>
-    api.put(`/departments/${id}/pr-config`, { maxPrs }),
+  getAll: () => refList<ApiResponse<Department[]>>('/departments'),
+  getActive: () => refList<ApiResponse<Department[]>>('/departments/active'),
+  getById: (id: number) => refGet<ApiResponse<Department>>(`/departments/${id}`),
+  create: async (data: { name: string }) => {
+    const r = await api.post('/departments', data);
+    invalidate('/departments');
+    return r;
+  },
+  update: async (id: number, data: { name: string }) => {
+    const r = await api.put(`/departments/${id}`, data);
+    invalidate('/departments');
+    return r;
+  },
+  delete: async (id: number) => {
+    const r = await api.delete(`/departments/${id}`);
+    invalidate('/departments');
+    return r;
+  },
+  updatePrLimit: async (id: number, maxPrs: number) => {
+    const r = await api.put(`/departments/${id}/pr-config`, { maxPrs });
+    invalidate('/departments');
+    return r;
+  },
 };
 
 // Students
@@ -68,15 +122,19 @@ export const studentApi = {
     size?: number;
   }) => api.get('/students', { params }),
   getById: (id: number) => api.get(`/students/${id}`),
-  getMyProfile: () => api.get('/students/me'),
-  create: (data: {
+  getMyProfile: () => refGet<ApiResponse<StudentProfile>>('/students/me'),
+  create: async (data: {
     registerNumber: string;
     userId?: number;
     departmentId: number;
     batch?: string;
     section?: string;
-  }) => api.post('/students', data),
-  updateProfile: (
+  }) => {
+    const r = await api.post('/students', data);
+    invalidate('/students');
+    return r;
+  },
+  updateProfile: async (
     id: number,
     data: {
       phone?: string;
@@ -84,13 +142,13 @@ export const studentApi = {
       batch?: string;
       section?: string;
       placementInterested?: boolean;
-      githubUrl?: string;
-      linkedinUrl?: string;
-      portfolioUrl?: string;
-      resumeUrl?: string;
     }
-  ) => api.put(`/students/${id}`, data),
-  updateAcademic: (
+  ) => {
+    const r = await api.put(`/students/${id}`, data);
+    invalidate('/students');
+    return r;
+  },
+  updateAcademic: async (
     id: number,
     data: {
       tenthPercentage?: number;
@@ -100,15 +158,27 @@ export const studentApi = {
       activeBacklogs?: number;
       historyOfBacklogs?: number;
     }
-  ) => api.put(`/students/${id}/academic`, data),
-  updateProfessional: (
+  ) => {
+    const r = await api.put(`/students/${id}/academic`, data);
+    invalidate('/students');
+    return r;
+  },
+  updateProfessional: async (
     id: number,
     data: {
       skills?: string;
       certifications?: string;
       projects?: string;
+      resumeUrl?: string;
+      githubUrl?: string;
+      linkedinUrl?: string;
+      portfolioUrl?: string;
     }
-  ) => api.put(`/students/${id}/professional`, data),
+  ) => {
+    const r = await api.put(`/students/${id}/professional`, data);
+    invalidate('/students');
+    return r;
+  },
 };
 
 // Companies
@@ -117,14 +187,18 @@ export const companyApi = {
     api.get('/companies', { params }),
   getAll: (params?: { search?: string; page?: number; size?: number }) =>
     api.get('/companies', { params }),
-  getById: (id: number) => api.get(`/companies/${id}`),
-  create: (data: {
+  getById: (id: number) => refGet<ApiResponse<Company>>(`/companies/${id}`),
+  create: async (data: {
     name: string;
     description?: string;
     companyType?: string;
     website?: string;
-  }) => api.post('/companies', data),
-  update: (
+  }) => {
+    const r = await api.post('/companies', data);
+    invalidate('/companies');
+    return r;
+  },
+  update: async (
     id: number,
     data: {
       name?: string;
@@ -132,11 +206,25 @@ export const companyApi = {
       companyType?: string;
       website?: string;
     }
-  ) => api.put(`/companies/${id}`, data),
-  delete: (id: number) => api.delete(`/companies/${id}`),
+  ) => {
+    const r = await api.put(`/companies/${id}`, data);
+    invalidate('/companies');
+    return r;
+  },
+  delete: async (id: number) => {
+    const r = await api.delete(`/companies/${id}`);
+    invalidate('/companies');
+    return r;
+  },
 };
 
 // Placement Drives
+const setStatus = async (id: number, status: string) => {
+  const r = await api.put(`/placement-drives/${id}/status`, null, { params: { status } });
+  invalidate('/placement-drives');
+  return r;
+};
+
 export const placementDriveApi = {
   search: (params: {
     status?: string;
@@ -150,7 +238,7 @@ export const placementDriveApi = {
     size?: number;
   }) => api.get('/placement-drives', { params }),
   getById: (id: number) => api.get(`/placement-drives/${id}`),
-  create: (data: {
+  create: async (data: {
     companyId: number;
     jobRole: string;
     packageLpa?: number;
@@ -158,20 +246,20 @@ export const placementDriveApi = {
     registrationDeadline?: string;
     location?: string;
     jobDescription?: string;
-  }) => api.post('/placement-drives', data),
-  open: (id: number) =>
-    api.put(`/placement-drives/${id}/status`, null, {
-      params: { status: 'OPEN' },
-    }),
-  close: (id: number) =>
-    api.put(`/placement-drives/${id}/status`, null, {
-      params: { status: 'CLOSED' },
-    }),
-  cancel: (id: number) =>
-    api.put(`/placement-drives/${id}/status`, null, {
-      params: { status: 'CANCELLED' },
-    }),
-  setEligibility: (
+  }) => {
+    const r = await api.post('/placement-drives', data);
+    invalidate('/placement-drives');
+    return r;
+  },
+  setStatus: async (id: number, status: string) => {
+    const r = await api.put(`/placement-drives/${id}/status`, null, { params: { status } });
+    invalidate('/placement-drives');
+    return r;
+  },
+  open: (id: number) => setStatus(id, 'REGISTRATION_OPEN'),
+  close: (id: number) => setStatus(id, 'REGISTRATION_CLOSED'),
+  cancel: (id: number) => setStatus(id, 'CANCELLED'),
+  setEligibility: async (
     id: number,
     data: {
       minCgpa?: number;
@@ -181,30 +269,45 @@ export const placementDriveApi = {
       minDiplomaPct?: number;
       allowedDepartmentIds?: number[];
     }
-  ) => api.post(`/placement-drives/${id}/eligibility`, data),
+  ) => {
+    const r = await api.post(`/placement-drives/${id}/eligibility`, data);
+    invalidate('/placement-drives');
+    return r;
+  },
   checkEligibility: (driveId: number, studentId: number) =>
     api.get(`/placement-drives/${driveId}/eligibility/${studentId}`),
 };
 
 // Messages
 export const messageApi = {
-  send: (data: {
+  send: async (data: {
     title: string;
     content: string;
     messageType?: string;
-    recipientIds: number[];
-  }) => api.post('/messages', data),
+    recipientIds?: number[];
+    departmentId?: number;
+    targetRole?: string;
+  }) => {
+    const r = await api.post('/messages', data);
+    invalidate('/messages');
+    return r;
+  },
   getAll: (params?: { page?: number; size?: number }) =>
     api.get('/messages', { params }),
   getSent: (params?: { page?: number; size?: number }) =>
     api.get('/messages/sent', { params }),
   getReceived: (params?: { page?: number; size?: number }) =>
     api.get('/messages/received', { params }),
-  markAsRead: (messageId: number) => api.post(`/messages/${messageId}/read`),
-  upvote: (messageId: number) =>
-    api.post(`/messages/${messageId}/analytics/upvote`),
-  downvote: (messageId: number) =>
-    api.post(`/messages/${messageId}/analytics/downvote`),
+  markAsRead: async (messageId: number) => {
+    const r = await api.post(`/messages/${messageId}/read`);
+    invalidate('/messages');
+    return r;
+  },
+  react: async (messageId: number, reaction: 'UPVOTE' | 'DOWNVOTE') => {
+    const r = await api.post(`/messages/${messageId}/reaction`, { reaction });
+    invalidate('/messages');
+    return r;
+  },
   getAnalytics: (messageId: number, type: string) =>
     api.get(`/messages/${messageId}/analytics/${type}`),
 };
@@ -227,39 +330,26 @@ export const contactRequestApi = {
 };
 
 // Student Interviews
+export interface CreateInterviewBody {
+  studentProfileId: number;
+  placementDriveId: number;
+  roundName: string;
+  status?: string;
+  attended?: boolean;
+  remarks?: string;
+  interviewDate?: string;
+}
+
 export const studentInterviewApi = {
-  getByDrive: (driveId: number, params?: { page?: number; size?: number }) =>
-    api.get(`/placement-drives/${driveId}/interviews`, { params }),
-  getByStudent: (
-    studentId: number,
-    params?: { page?: number; size?: number }
-  ) => api.get(`/students/${studentId}/interviews`, { params }),
-  create: (
-    driveId: number,
-    data: {
-      studentProfileId: number;
-      roundName: string;
-      status: string;
-      attended?: boolean;
-      remarks?: string;
-      interviewDate?: string;
-    }
-  ) => api.post(`/placement-drives/${driveId}/interviews`, data),
-  update: (
-    driveId: number,
-    interviewId: number,
-    data: {
-      roundName?: string;
-      status?: string;
-      attended?: boolean;
-      remarks?: string;
-      interviewDate?: string;
-    }
-  ) =>
-    api.put(
-      `/placement-drives/${driveId}/interviews/${interviewId}`,
-      data
-    ),
+  getMine: () => api.get('/interviews'),
+  getByDrive: (driveId: number) => api.get(`/interviews/drive/${driveId}`),
+  getByStudent: (studentProfileId: number) =>
+    api.get(`/interviews/student/${studentProfileId}`),
+  create: async (data: CreateInterviewBody) => {
+    const r = await api.post('/interviews', data);
+    invalidate('/interviews', '/students');
+    return r;
+  },
 };
 
 // Reports

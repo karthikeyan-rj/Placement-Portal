@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
-import { companyApi, placementDriveApi } from '../../api/api';
-import type { PlacementDrive, Company } from '../../types';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { companyApi, placementDriveApi, departmentApi } from '../../api/api';
+import type { PlacementDrive, Company, Department } from '../../types';
+import { getErrorMessage } from '../../api/axios';
+import { useAuth } from '../../context/AuthContext';
 import {
   Button,
   SearchInput,
@@ -9,32 +11,87 @@ import {
   Textarea,
   Badge,
   Modal,
-  Pagination,
+  ConfirmDialog,
   Skeleton,
   EmptyState,
+  ErrorState,
   PageHeader,
   Dropdown,
-  ConfirmDialog,
   PageContainer,
+  Avatar,
+  FilterToolbar,
   notify,
 } from '../../components/ui';
-import { usePaginatedData } from '../../hooks/useApi';
-import { Calendar, MapPin, Building2, Briefcase, Clock, IndianRupee } from 'lucide-react';
+import {
+  Briefcase,
+  Calendar,
+  MapPin,
+  IndianRupee,
+  Users,
+  GraduationCap,
+  LogIn,
+  Lock,
+  Ban,
+  CheckSquare,
+  Square,
+  Search,
+  CornerDownLeft,
+} from 'lucide-react';
 
-type StatusFilter = 'ALL' | 'UPCOMING' | 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CLOSED' | 'CANCELLED';
+type BadgeVariant = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
-const STATUS_TABS: StatusFilter[] = ['ALL', 'UPCOMING', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'];
+const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
+  UPCOMING: { label: 'Upcoming', variant: 'info' },
+  REGISTRATION_OPEN: { label: 'Open for Registration', variant: 'success' },
+  REGISTRATION_CLOSED: { label: 'Registration Closed', variant: 'neutral' },
+  ONGOING: { label: 'Ongoing', variant: 'warning' },
+  COMPLETED: { label: 'Completed', variant: 'neutral' },
+  CANCELLED: { label: 'Cancelled', variant: 'danger' },
+};
 
-const statusBadgeVariant = (s: string): 'warning' | 'success' | 'danger' | 'info' | 'neutral' => {
-  switch (s) {
-    case 'UPCOMING': return 'info';
-    case 'OPEN': return 'success';
-    case 'IN_PROGRESS': return 'warning';
-    case 'COMPLETED': return 'neutral';
-    case 'CLOSED': return 'neutral';
-    case 'CANCELLED': return 'danger';
-    default: return 'neutral';
-  }
+const statusMeta = (s: string): { label: string; variant: BadgeVariant } =>
+  STATUS_META[s] ?? {
+    label: s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()),
+    variant: 'neutral',
+  };
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const formatDriveDate = (iso: string | null): string => {
+  if (!iso) return '—';
+  const [y, mo, d] = iso.split('-');
+  if (!y || !mo || !d || Number.isNaN(Number(mo))) return iso;
+  return `${d} ${MONTHS[Number(mo) - 1]} ${y}`;
+};
+
+const cleanNum = (n: number | null | undefined): string => {
+  if (n == null) return '';
+  const s = String(n);
+  return s.includes('.') ? s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '') : s;
+};
+
+const isEmptyCriteria = (c: PlacementDrive['eligibilityCriteria']) =>
+  !c ||
+  (c.minCgpa == null &&
+    c.maxActiveBacklogs == null &&
+    c.minTenthPct == null &&
+    c.minTwelfthPct == null &&
+    c.minDiplomaPct == null &&
+    (!c.allowedDepartmentNames || c.allowedDepartmentNames.length === 0));
+
+const eligibilitySummary = (drive: PlacementDrive): string => {
+  const c = drive.eligibilityCriteria;
+  if (isEmptyCriteria(c)) return 'No additional eligibility restrictions';
+  const parts: string[] = [];
+  if (c!.minCgpa != null) parts.push(`CGPA ≥ ${cleanNum(c!.minCgpa)}`);
+  if (c!.maxActiveBacklogs != null)
+    parts.push(`${c!.maxActiveBacklogs === 0 ? '0' : `≤ ${c!.maxActiveBacklogs}`} backlogs`);
+  if (c!.minTenthPct != null) parts.push(`10th ≥ ${cleanNum(c!.minTenthPct)}%`);
+  if (c!.minTwelfthPct != null) parts.push(`12th ≥ ${cleanNum(c!.minTwelfthPct)}%`);
+  if (c!.minDiplomaPct != null) parts.push(`Diploma ≥ ${cleanNum(c!.minDiplomaPct)}%`);
+  if (c!.allowedDepartmentNames && c!.allowedDepartmentNames.length > 0)
+    parts.push(c!.allowedDepartmentNames.join(', '));
+  return parts.join('  ·  ');
 };
 
 interface DriveForm {
@@ -57,389 +114,940 @@ const emptyForm: DriveForm = {
   jobDescription: '',
 };
 
+interface EligibilityForm {
+  minCgpa: string;
+  maxActiveBacklogs: string;
+  minTenthPct: string;
+  minTwelfthPct: string;
+  minDiplomaPct: string;
+  allowedDepartmentIds: number[];
+}
+
+const emptyEligibilityForm = (c: PlacementDrive['eligibilityCriteria']): EligibilityForm => ({
+  minCgpa: c?.minCgpa != null ? cleanNum(c.minCgpa) : '',
+  maxActiveBacklogs: c?.maxActiveBacklogs != null ? String(c.maxActiveBacklogs) : '',
+  minTenthPct: c?.minTenthPct != null ? cleanNum(c.minTenthPct) : '',
+  minTwelfthPct: c?.minTwelfthPct != null ? cleanNum(c.minTwelfthPct) : '',
+  minDiplomaPct: c?.minDiplomaPct != null ? cleanNum(c.minDiplomaPct) : '',
+  allowedDepartmentIds: c?.allowedDepartmentIds ?? [],
+});
+
+const STATUS_OPTIONS = Object.keys(STATUS_META);
+
 export default function DrivesPage() {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const { user } = useAuth();
+  const isPO = user?.role === 'PO';
+
+  const [drives, setDrives] = useState<PlacementDrive[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+
   const [search, setSearch] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<DriveForm>(emptyForm);
-  const [saving, setSaving] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [companyFilter, setCompanyFilter] = useState('ALL');
+
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [companiesLoading, setCompaniesLoading] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<{
+  const [departments, setDepartments] = useState<Department[]>([]);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<DriveForm>(emptyForm);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  const [viewDrive, setViewDrive] = useState<PlacementDrive | null>(null);
+
+  const [eligDrive, setEligDrive] = useState<PlacementDrive | null>(null);
+  const [eligForm, setEligForm] = useState<EligibilityForm>(emptyEligibilityForm(null));
+  const [eligSaving, setEligSaving] = useState(false);
+  const [eligError, setEligError] = useState('');
+  const [deptSearch, setDeptSearch] = useState('');
+
+  const [confirm, setConfirm] = useState<{
     drive: PlacementDrive;
-    action: 'open' | 'close' | 'cancel';
+    action: 'close' | 'cancel';
   } | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [actionSaving, setActionSaving] = useState(false);
 
-  const params: Record<string, string | number> = {};
-  if (statusFilter !== 'ALL') params.status = statusFilter;
-  if (search) params.search = search;
-
-  const {
-    data: drives,
-    loading,
-    page,
-    totalPages,
-    totalElements,
-    setPage,
-    refresh,
-  } = usePaginatedData<PlacementDrive>({
-    url: '/placement-drives',
-    params,
-  });
-
-  useEffect(() => {
-    setCompaniesLoading(true);
-    companyApi
-      .getAll({ size: 500 })
-      .then((res) => {
-        const d = res.data?.data;
-        setCompanies(d?.content ?? (Array.isArray(d) ? d : []));
-      })
-      .catch(() => {})
-      .finally(() => setCompaniesLoading(false));
+  const fetchDrives = useCallback(async () => {
+    try {
+      const res = await placementDriveApi.getAll({ size: 1000 });
+      setDrives(res.data?.data?.content ?? []);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchDrives();
+  }, [fetchDrives]);
+
+  useEffect(() => {
+    companyApi
+      .getAll({ size: 1000 })
+      .then((res) => setCompanies(res.data?.data?.content ?? []))
+      .catch(() => {});
+    departmentApi
+      .getActive()
+      .then((res) => setDepartments(res.data?.data ?? []))
+      .catch(() => {});
+  }, []);
+
+  const filteredDrives = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return drives.filter((d) => {
+      if (statusFilter !== 'ALL' && d.status !== statusFilter) return false;
+      if (companyFilter !== 'ALL' && String(d.companyId) !== companyFilter) return false;
+      if (q) {
+        const hay = `${d.companyName} ${d.jobRole} ${d.companyType ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [drives, search, statusFilter, companyFilter]);
+
+  const hasFilters = search.trim() !== '' || statusFilter !== 'ALL' || companyFilter !== 'ALL';
+
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter('ALL');
+    setCompanyFilter('ALL');
+  };
+
+  const companyFilterOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    drives.forEach((d) => seen.set(String(d.companyId), d.companyName));
+    return [...seen.entries()].map(([value, label]) => ({ value, label }));
+  }, [drives]);
+
+  const companyOptions = companies.map((c) => ({ label: c.name, value: String(c.id) }));
+
+  const deadlineWarning =
+    createForm.driveDate && createForm.registrationDeadline
+      ? new Date(createForm.registrationDeadline) > new Date(createForm.driveDate)
+        ? 'Registration deadline is after the drive date. The drive will stay open past its start — double-check this before saving.'
+        : ''
+      : '';
+
+  const validateCreate = (): string => {
+    if (!createForm.companyId) return 'Company is required.';
+    if (!createForm.jobRole.trim()) return 'Job role is required.';
+    if (createForm.packageLpa) {
+      const p = Number(createForm.packageLpa);
+      if (!Number.isFinite(p) || p < 0) return 'Package must be a non-negative number.';
+    }
+    return '';
+  };
+
   const handleCreate = async () => {
-    if (!form.companyId || !form.jobRole.trim()) {
-      notify.error('Company and Job Role are required');
+    const v = validateCreate();
+    if (v) {
+      setCreateError(v);
       return;
     }
-    setSaving(true);
+    setCreateSaving(true);
+    setCreateError('');
     try {
       await placementDriveApi.create({
-        companyId: Number(form.companyId),
-        jobRole: form.jobRole,
-        packageLpa: form.packageLpa ? Number(form.packageLpa) : undefined,
-        driveDate: form.driveDate || undefined,
-        registrationDeadline: form.registrationDeadline || undefined,
-        location: form.location || undefined,
-        jobDescription: form.jobDescription || undefined,
+        companyId: Number(createForm.companyId),
+        jobRole: createForm.jobRole.trim(),
+        packageLpa: createForm.packageLpa ? Number(createForm.packageLpa) : undefined,
+        driveDate: createForm.driveDate || undefined,
+        registrationDeadline: createForm.registrationDeadline || undefined,
+        location: createForm.location || undefined,
+        jobDescription: createForm.jobDescription || undefined,
       });
       notify.success('Drive created successfully');
-      setModalOpen(false);
-      setForm(emptyForm);
-      refresh();
-    } catch {
-      notify.error('Failed to create drive');
+      setCreateOpen(false);
+      setCreateForm(emptyForm);
+      fetchDrives();
+    } catch (err) {
+      setCreateError(getErrorMessage(err));
     } finally {
-      setSaving(false);
+      setCreateSaving(false);
     }
   };
 
-  const executeStatusChange = async () => {
-    if (!confirmAction) return;
-    setActionLoading(true);
+  const filteredDepartments = useMemo(() => {
+    const q = deptSearch.trim().toLowerCase();
+    return q
+      ? departments.filter((d) => d.name.toLowerCase().includes(q))
+      : departments;
+  }, [departments, deptSearch]);
+
+  const validateEligibility = (): string => {
+    const rules: [string, number, number, string][] = [
+      ['minCgpa', 0, 10, 'Minimum CGPA must be between 0 and 10.'],
+      ['minTenthPct', 0, 100, '10th percentage must be between 0 and 100.'],
+      ['minTwelfthPct', 0, 100, '12th percentage must be between 0 and 100.'],
+      ['minDiplomaPct', 0, 100, 'Diploma percentage must be between 0 and 100.'],
+    ];
+    for (const [key, min, max, msg] of rules) {
+      const raw = eligForm[key as keyof EligibilityForm] as string;
+      if (raw === '') continue;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < min || n > max) return msg;
+    }
+    if (eligForm.maxActiveBacklogs !== '') {
+      const b = Number(eligForm.maxActiveBacklogs);
+      if (!Number.isInteger(b) || b < 0) return 'Maximum backlogs must be a whole number 0 or greater.';
+    }
+    return '';
+  };
+
+  const openEligibility = (d: PlacementDrive) => {
+    setEligForm(emptyEligibilityForm(d.eligibilityCriteria));
+    setEligError('');
+    setDeptSearch('');
+    setEligDrive(d);
+  };
+
+  const toggleDept = (id: number) => {
+    setEligForm((f) => ({
+      ...f,
+      allowedDepartmentIds: f.allowedDepartmentIds.includes(id)
+        ? f.allowedDepartmentIds.filter((x) => x !== id)
+        : [...f.allowedDepartmentIds, id],
+    }));
+  };
+
+  const handleEligibility = async () => {
+    if (!eligDrive) return;
+    const v = validateEligibility();
+    if (v) {
+      setEligError(v);
+      return;
+    }
+    setEligSaving(true);
+    setEligError('');
     try {
-      const { drive, action } = confirmAction;
-      if (action === 'open') await placementDriveApi.open(drive.id);
-      else if (action === 'close') await placementDriveApi.close(drive.id);
-      else if (action === 'cancel') await placementDriveApi.cancel(drive.id);
-      notify.success(
-        `Drive ${action === 'open' ? 'opened' : action === 'close' ? 'closed' : 'cancelled'}`
-      );
-      setConfirmAction(null);
-      refresh();
+      const payload: Record<string, unknown> = {
+        allowedDepartmentIds: eligForm.allowedDepartmentIds,
+      };
+      if (eligForm.minCgpa !== '') payload.minCgpa = Number(eligForm.minCgpa);
+      if (eligForm.maxActiveBacklogs !== '')
+        payload.maxActiveBacklogs = Number(eligForm.maxActiveBacklogs);
+      if (eligForm.minTenthPct !== '') payload.minTenthPct = Number(eligForm.minTenthPct);
+      if (eligForm.minTwelfthPct !== '') payload.minTwelfthPct = Number(eligForm.minTwelfthPct);
+      if (eligForm.minDiplomaPct !== '') payload.minDiplomaPct = Number(eligForm.minDiplomaPct);
+      const res = await placementDriveApi.setEligibility(eligDrive.id, payload);
+      notify.success(res.data?.message || 'Eligibility criteria saved');
+      setEligDrive(null);
+      fetchDrives();
+    } catch (err) {
+      setEligError(getErrorMessage(err));
+    } finally {
+      setEligSaving(false);
+    }
+  };
+
+  const runStatus = async (driveId: number, status: string) => {
+    setActionSaving(true);
+    try {
+      await placementDriveApi.setStatus(driveId, status);
+      notify.success('Drive status updated');
+      fetchDrives();
     } catch {
       notify.error('Failed to update drive status');
     } finally {
-      setActionLoading(false);
+      setActionSaving(false);
+    }
+  };
+
+  const runConfirmedStatus = async () => {
+    if (!confirm) return;
+    setActionSaving(true);
+    try {
+      await placementDriveApi.setStatus(
+        confirm.drive.id,
+        confirm.action === 'close' ? 'REGISTRATION_CLOSED' : 'CANCELLED'
+      );
+      notify.success(
+        confirm.action === 'close'
+          ? 'Registration closed'
+          : `${confirm.drive.companyName} drive cancelled`
+      );
+      setConfirm(null);
+      fetchDrives();
+    } catch {
+      notify.error('Failed to update drive status');
+    } finally {
+      setActionSaving(false);
     }
   };
 
   const getActions = (d: PlacementDrive) => {
-    const items: { label: string; onClick: () => void; danger?: boolean }[] = [];
-    if (d.status === 'UPCOMING' || d.status === 'OPEN') {
+    const items: { label: string; onClick: () => void; danger?: boolean; icon?: React.ReactNode }[] = [
+      { label: 'View', icon: <CornerDownLeft size={15} />, onClick: () => setViewDrive(d) },
+    ];
+    if (isPO) {
       items.push({
-        label: 'Open',
-        onClick: () => setConfirmAction({ drive: d, action: 'open' }),
+        label: 'Eligibility',
+        icon: <GraduationCap size={15} />,
+        onClick: () => openEligibility(d),
       });
-    }
-    if (d.status === 'OPEN' || d.status === 'IN_PROGRESS') {
-      items.push({
-        label: 'Close',
-        onClick: () => setConfirmAction({ drive: d, action: 'close' }),
-      });
-    }
-    if (d.status !== 'CLOSED' && d.status !== 'COMPLETED' && d.status !== 'CANCELLED') {
-      items.push({
-        label: 'Cancel',
-        onClick: () => setConfirmAction({ drive: d, action: 'cancel' }),
-        danger: true,
-      });
+      if (d.status === 'UPCOMING' || d.status === 'REGISTRATION_CLOSED' || d.status === 'ONGOING') {
+        items.push({
+          label: 'Open Registration',
+          icon: <LogIn size={15} />,
+          onClick: () => runStatus(d.id, 'REGISTRATION_OPEN'),
+        });
+      }
+      if (d.status === 'REGISTRATION_OPEN') {
+        items.push({
+          label: 'Close Registration',
+          icon: <Lock size={15} />,
+          onClick: () => setConfirm({ drive: d, action: 'close' }),
+        });
+      }
+      if (d.status !== 'COMPLETED' && d.status !== 'CANCELLED') {
+        items.push({
+          label: 'Cancel Drive',
+          icon: <Ban size={15} />,
+          danger: true,
+          onClick: () => setConfirm({ drive: d, action: 'cancel' }),
+        });
+      }
     }
     return items;
   };
+
+  const renderInfoCell = (label: string, value: React.ReactNode, icon?: React.ReactNode) => (
+    <div className="min-w-0">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-0.5">
+        {label}
+      </p>
+      <p className="flex items-center gap-1.5 text-[13.5px] font-medium text-neutral-700">
+        {icon}
+        {value}
+      </p>
+    </div>
+  );
 
   return (
     <PageContainer>
       <PageHeader
         title="Placement Drives"
-        description="Manage campus recruitment drives."
+        description="Manage upcoming recruitment opportunities, eligibility criteria and placement schedules."
         actions={
-          <Button
-            onClick={() => {
-              setForm(emptyForm);
-              setModalOpen(true);
-            }}
-            size="md"
-          >
-            <Briefcase size={15} />
-            Create Drive
-          </Button>
+          isPO && (
+            <Button
+              onClick={() => {
+                setCreateForm(emptyForm);
+                setCreateError('');
+                setCreateOpen(true);
+              }}
+              size="md"
+            >
+              <Briefcase size={15} />
+              Create Drive
+            </Button>
+          )
         }
       />
 
-      <div className="bg-white rounded-xl border border-neutral-200/70 shadow-card">
-        <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex gap-1.5 flex-wrap">
-            {STATUS_TABS.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => {
-                  setStatusFilter(tab);
-                  setPage(0);
-                }}
-                className={`px-3 py-1.5 text-[14px] font-medium rounded-md transition-colors ${
-                  statusFilter === tab
-                    ? 'bg-primary-500 text-white shadow-sm'
-                    : 'text-neutral-600 hover:bg-neutral-50 border border-neutral-200/80'
-                }`}
-              >
-                {tab === 'ALL' ? 'All' : tab.charAt(0) + tab.slice(1).toLowerCase().replace('_', ' ')}
-              </button>
-            ))}
-          </div>
-          <div className="w-56 shrink-0">
-            <SearchInput
-              placeholder="Search drives..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+      <FilterToolbar
+        search={
+          <SearchInput
+            placeholder="Search company / role..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        }
+        filters={
+          <>
+            <Select
+              aria-label="Filter by status"
+              options={[
+                { label: 'All statuses', value: 'ALL' },
+                ...STATUS_OPTIONS.map((s) => ({ label: statusMeta(s).label, value: s })),
+              ]}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
             />
+            <Select
+              aria-label="Filter by company"
+              options={[
+                { label: 'All companies', value: 'ALL' },
+                ...companyFilterOptions,
+              ]}
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+            />
+            {hasFilters && (
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
+          </>
+        }
+      >
+        <span className="text-[13.5px] text-neutral-500">
+          {filteredDrives.length} {filteredDrives.length === 1 ? 'placement drive' : 'placement drives'}
+        </span>
+      </FilterToolbar>
+
+      {loading ? (
+        <div className="bg-white rounded-[20px] border border-neutral-200/60 overflow-hidden divide-y divide-neutral-100/80">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="px-5 py-4 flex items-center gap-6 animate-pulse">
+              <div className="w-10 h-10 rounded-full bg-neutral-200/70" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3.5 w-40" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+              <Skeleton className="h-4 w-20 rounded-full" />
+              <Skeleton className="h-4 w-28" />
+              <div className="w-8 h-8 rounded-[10px] bg-neutral-200/70" />
+            </div>
+          ))}
+        </div>
+      ) : loadError ? (
+        <ErrorState
+          title="Unable to load placement drives"
+          message="We couldn't retrieve placement drives right now. Please try again."
+          onRetry={() => {
+            setLoading(true);
+            fetchDrives();
+          }}
+        />
+      ) : drives.length === 0 ? (
+        <EmptyState
+          icon={<Briefcase size={40} />}
+          title="No placement drives available"
+          description={
+            isPO
+              ? 'Create your first placement drive to get started.'
+              : 'There are no placement drives yet. Check back later.'
+          }
+          action={
+            isPO ? (
+              <Button
+                onClick={() => {
+                  setCreateForm(emptyForm);
+                  setCreateError('');
+                  setCreateOpen(true);
+                }}
+              >
+                Create Drive
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : filteredDrives.length === 0 ? (
+        <EmptyState
+          icon={<Search size={40} />}
+          title="No placement drives match your filters"
+          description="Try adjusting the search or filter criteria."
+          action={
+            <Button variant="secondary" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          }
+        />
+      ) : (
+        <div className="bg-white rounded-[20px] border border-neutral-200/60 shadow-soft overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-neutral-100/80 flex items-center justify-between">
+            <h2 className="text-[14.5px] font-semibold text-neutral-900">Drives</h2>
+            <Badge variant="neutral" size="sm">
+              {filteredDrives.length}
+            </Badge>
+          </div>
+          <div className="divide-y divide-neutral-100/80">
+            {filteredDrives.map((d) => {
+              const meta = statusMeta(d.status);
+              return (
+                <article
+                  key={d.id}
+                  className="px-4 sm:px-5 py-4 flex flex-wrap items-start sm:items-center gap-x-3 md:gap-x-6 gap-y-2.5"
+                >
+                  <div className="min-w-0 flex-1 basis-56 flex items-center gap-3">
+                    <Avatar name={d.companyName} size="sm" className="shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-semibold text-neutral-900 truncate leading-tight">
+                        {d.companyName}
+                      </p>
+                      <p className="text-[13.5px] font-medium text-neutral-600 truncate">
+                        {d.jobRole}
+                      </p>
+                    </div>
+                  </div>
+
+                  {d.packageLpa != null ? (
+                    <div className="min-w-[92px]">
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-0.5">
+                        Package
+                      </p>
+                      <p className="flex items-center gap-1 text-[14px] font-bold text-primary-600">
+                        <IndianRupee size={13} />
+                        {cleanNum(d.packageLpa)} LPA
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="min-w-[92px]">
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-0.5">
+                        Package
+                      </p>
+                      <p className="text-[13px] text-neutral-400">Not disclosed</p>
+                    </div>
+                  )}
+
+                  {renderInfoCell(
+                    'Drive Date',
+                    formatDriveDate(d.driveDate),
+                    <Calendar size={13} className="text-neutral-400 shrink-0" />
+                  )}
+
+                  {renderInfoCell(
+                    'Register By',
+                    formatDriveDate(d.registrationDeadline),
+                    <Calendar size={13} className="text-neutral-400 shrink-0" />
+                  )}
+
+                  <div className="min-w-[190px] flex-1 basis-44">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-0.5">
+                      Eligibility
+                    </p>
+                    <p className="flex items-start gap-1.5 text-[13px] text-neutral-600 leading-snug">
+                      <Users size={13} className="text-neutral-300 shrink-0 mt-0.5" />
+                      <span>{eligibilitySummary(d)}</span>
+                    </p>
+                  </div>
+
+                  <div className="ml-auto shrink-0 flex items-center gap-2">
+                    <Badge variant={meta.variant} dot size="sm">
+                      {meta.label}
+                    </Badge>
+                    <Dropdown items={getActions(d)} />
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {loading ? (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl border border-neutral-200/70 shadow-card p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-                <Skeleton className="h-4 w-40 mb-3" />
-                <Skeleton className="h-6 w-20 mb-3" />
-                <div className="space-y-2 mt-auto">
-                  <Skeleton className="h-3 w-36" />
-                  <Skeleton className="h-3 w-32" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : drives.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              icon={<Briefcase size={40} />}
-              title="No placement drives found"
-              description={
-                statusFilter === 'ALL'
-                  ? 'Create your first placement drive to get started.'
-                  : `No drives with status "${statusFilter}".`
-              }
-              action={
-                <Button onClick={() => { setForm(emptyForm); setModalOpen(true); }}>
-                  Create Drive
-                </Button>
-              }
-            />
-          </div>
-        ) : (
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {drives.map((drive) => (
-                <div
-                  key={drive.id}
-                  className="bg-white rounded-xl border border-neutral-200/70 shadow-card p-5 flex flex-col hover:shadow-raised hover:-translate-y-0.5 hover:border-primary-200/70 transition-all duration-150"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="shrink-0 p-1.5 rounded-lg bg-brand-navy">
-                        <Building2 size={14} className="text-white" />
-                      </div>
-                      <span className="text-[15px] font-semibold text-brand-navy truncate">
-                        {drive.companyName}
-                      </span>
-                    </div>
-                    <Badge variant={statusBadgeVariant(drive.status)} dot={true}>
-                      {drive.status.replace('_', ' ')}
-                    </Badge>
-                  </div>
-
-                  <p className="text-[16px] font-semibold text-neutral-900 mb-2">
-                    {drive.jobRole}
-                  </p>
-
-                  {drive.packageLpa != null && (
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <IndianRupee size={15} className="text-primary-600" />
-                      <span className="text-[17px] font-bold text-primary-600">
-                        {drive.packageLpa}
-                      </span>
-                      <span className="text-[15px] font-medium text-primary-500">LPA</span>
-                    </div>
-                  )}
-
-                  <div className="space-y-1.5 text-[15px] text-neutral-500 mt-auto pt-1">
-                    {drive.driveDate && (
-                      <div className="flex items-center gap-1.5">
-                        <Calendar size={12} className="text-neutral-400 shrink-0" />
-                        <span>Drive: {new Date(drive.driveDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                    {drive.registrationDeadline && (
-                      <div className="flex items-center gap-1.5">
-                        <Clock size={12} className="text-neutral-400 shrink-0" />
-                        <span>Deadline: {new Date(drive.registrationDeadline).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                    {drive.location && (
-                      <div className="flex items-center gap-1.5">
-                        <MapPin size={12} className="text-neutral-400 shrink-0" />
-                        <span>{drive.location}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {drive.eligibilityCriteria && (
-                    <div className="mt-3 pt-3 border-t border-neutral-100">
-                      <p className="text-[15px] font-medium text-neutral-400 uppercase tracking-wider mb-2">
-                        Eligibility
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {drive.eligibilityCriteria.minCgpa != null && (
-                          <Badge variant="info" size="sm">CGPA &ge; {drive.eligibilityCriteria.minCgpa}</Badge>
-                        )}
-                        {drive.eligibilityCriteria.maxActiveBacklogs != null && (
-                          <Badge variant="warning" size="sm">Backlogs &le; {drive.eligibilityCriteria.maxActiveBacklogs}</Badge>
-                        )}
-                        {drive.eligibilityCriteria.minTenthPct != null && (
-                          <Badge variant="info" size="sm">10th &ge; {drive.eligibilityCriteria.minTenthPct}%</Badge>
-                        )}
-                        {drive.eligibilityCriteria.minTwelfthPct != null && (
-                          <Badge variant="info" size="sm">12th &ge; {drive.eligibilityCriteria.minTwelfthPct}%</Badge>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {getActions(drive).length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-neutral-100 flex justify-end">
-                      <Dropdown items={getActions(drive)} />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {totalPages > 1 && (
-              <div className="mt-5 pt-4 border-t border-neutral-100">
-                <Pagination
-                  page={page}
-                  totalPages={totalPages}
-                  totalElements={totalElements}
-                  onPageChange={setPage}
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
+      {/* ── Create Drive ── */}
       <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        isOpen={createOpen}
+        onClose={() => !createSaving && setCreateOpen(false)}
         title="Create Placement Drive"
         description="Set up a new campus recruitment drive."
         size="lg"
         actions={
           <>
-            <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>
+            <Button variant="secondary" onClick={() => setCreateOpen(false)} disabled={createSaving}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} loading={saving}>
+            <Button onClick={handleCreate} loading={createSaving}>
               Create Drive
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        {createError && (
+          <div className="mb-4 rounded-[12px] border border-danger-200 bg-danger-50 px-4 py-3 text-[13.5px] text-danger-700">
+            {createError}
+          </div>
+        )}
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+          Company &amp; Role
+        </p>
+        <div className="space-y-4 mb-6">
           <Select
             label="Company"
             required
-            placeholder={companiesLoading ? 'Loading companies...' : 'Select company'}
-            options={companies.map((c) => ({ label: c.name, value: String(c.id) }))}
-            value={form.companyId}
-            onChange={(e) => setForm({ ...form, companyId: e.target.value })}
+            placeholder={companies.length === 0 ? 'Loading companies...' : 'Select company'}
+            options={companyOptions}
+            value={createForm.companyId}
+            onChange={(e) => setCreateForm({ ...createForm, companyId: e.target.value })}
           />
           <Input
             label="Job Role"
             required
             placeholder="e.g. Software Engineer"
-            value={form.jobRole}
-            onChange={(e) => setForm({ ...form, jobRole: e.target.value })}
+            value={createForm.jobRole}
+            onChange={(e) => setCreateForm({ ...createForm, jobRole: e.target.value })}
           />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Package (LPA)"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="e.g. 6.5"
-              value={form.packageLpa}
-              onChange={(e) => setForm({ ...form, packageLpa: e.target.value })}
-            />
-            <Input
-              label="Location"
-              placeholder="e.g. Bangalore"
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Drive Date"
-              type="date"
-              value={form.driveDate}
-              onChange={(e) => setForm({ ...form, driveDate: e.target.value })}
-            />
-            <Input
-              label="Registration Deadline"
-              type="date"
-              value={form.registrationDeadline}
-              onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })}
-            />
-          </div>
+        </div>
+
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+          Schedule
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <Input
+            label="Drive Date"
+            type="date"
+            value={createForm.driveDate}
+            onChange={(e) => setCreateForm({ ...createForm, driveDate: e.target.value })}
+          />
+          <Input
+            label="Registration Deadline"
+            type="date"
+            value={createForm.registrationDeadline}
+            onChange={(e) => setCreateForm({ ...createForm, registrationDeadline: e.target.value })}
+          />
+        </div>
+        {deadlineWarning && (
+          <p className="mb-6 text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-[10px] px-3 py-2.5">
+            {deadlineWarning}
+          </p>
+        )}
+
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+          Placement Details
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Package (LPA)"
+            type="number"
+            min="0"
+            step="0.1"
+            placeholder="e.g. 6.5"
+            value={createForm.packageLpa}
+            onChange={(e) => setCreateForm({ ...createForm, packageLpa: e.target.value })}
+          />
+          <Input
+            label="Location"
+            placeholder="e.g. Bangalore"
+            value={createForm.location}
+            onChange={(e) => setCreateForm({ ...createForm, location: e.target.value })}
+          />
+        </div>
+        <div className="mt-4">
           <Textarea
-            label="Job Description"
+            label="Description / Notes"
             rows={4}
-            placeholder="Describe the role, responsibilities, and requirements..."
-            value={form.jobDescription}
-            onChange={(e) => setForm({ ...form, jobDescription: e.target.value })}
+            placeholder="Describe the role, responsibilities, and instructions for students..."
+            value={createForm.jobDescription}
+            onChange={(e) => setCreateForm({ ...createForm, jobDescription: e.target.value })}
           />
         </div>
       </Modal>
 
+      {/* ── View Drive ── */}
+      <Modal
+        isOpen={!!viewDrive}
+        onClose={() => setViewDrive(null)}
+        title="Drive Details"
+        description={viewDrive ? `${viewDrive.companyName} · ${viewDrive.jobRole}` : ''}
+        size="lg"
+        actions={
+          <Button variant="secondary" onClick={() => setViewDrive(null)}>
+            Close
+          </Button>
+        }
+      >
+        {viewDrive && (
+          <div className="space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar name={viewDrive.companyName} size="lg" className="shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[18px] font-semibold text-neutral-900">
+                    {viewDrive.companyName}
+                  </p>
+                  <p className="text-[14px] text-neutral-500">
+                    {viewDrive.jobRole}
+                    {viewDrive.location ? ` · ${viewDrive.location}` : ''}
+                  </p>
+                </div>
+              </div>
+              <Badge variant={statusMeta(viewDrive.status).variant} dot>
+                {statusMeta(viewDrive.status).label}
+              </Badge>
+            </div>
+
+            {viewDrive.packageLpa != null && (
+              <div className="flex items-center gap-2">
+                <IndianRupee size={20} className="text-primary-600" />
+                <span className="text-[22px] font-bold text-primary-600">
+                  {cleanNum(viewDrive.packageLpa)} LPA
+                </span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              {viewDrive.driveDate != null && (
+                <div className="rounded-[14px] border border-neutral-200/70 bg-neutral-50/60 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
+                    Drive Date
+                  </p>
+                  <p className="text-[15px] font-semibold text-neutral-800">
+                    {formatDriveDate(viewDrive.driveDate)}
+                  </p>
+                </div>
+              )}
+              {viewDrive.registrationDeadline != null && (
+                <div className="rounded-[14px] border border-neutral-200/70 bg-neutral-50/60 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
+                    Registration Deadline
+                  </p>
+                  <p className="text-[15px] font-semibold text-neutral-800">
+                    {formatDriveDate(viewDrive.registrationDeadline)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-2.5">
+                <GraduationCap size={16} className="text-primary-600" />
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500">
+                  Eligibility
+                </p>
+              </div>
+              <div className="rounded-[14px] border border-neutral-200/70 p-4 space-y-2.5">
+                {isEmptyCriteria(viewDrive.eligibilityCriteria) ? (
+                  <p className="text-[14px] text-neutral-500">
+                    No additional eligibility restrictions.
+                  </p>
+                ) : (
+                  <>
+                    {viewDrive.eligibilityCriteria!.minCgpa != null && (
+                      <EligRow
+                        label="CGPA"
+                        value={`≥ ${cleanNum(viewDrive.eligibilityCriteria!.minCgpa)}`}
+                      />
+                    )}
+                    {viewDrive.eligibilityCriteria!.maxActiveBacklogs != null && (
+                      <EligRow
+                        label="Active Backlogs"
+                        value={`≤ ${viewDrive.eligibilityCriteria!.maxActiveBacklogs}`}
+                      />
+                    )}
+                    {viewDrive.eligibilityCriteria!.minTenthPct != null && (
+                      <EligRow
+                        label="10th Percentage"
+                        value={`≥ ${cleanNum(viewDrive.eligibilityCriteria!.minTenthPct)}%`}
+                      />
+                    )}
+                    {viewDrive.eligibilityCriteria!.minTwelfthPct != null && (
+                      <EligRow
+                        label="12th Percentage"
+                        value={`≥ ${cleanNum(viewDrive.eligibilityCriteria!.minTwelfthPct)}%`}
+                      />
+                    )}
+                    {viewDrive.eligibilityCriteria!.minDiplomaPct != null && (
+                      <EligRow
+                        label="Diploma Percentage"
+                        value={`≥ ${cleanNum(viewDrive.eligibilityCriteria!.minDiplomaPct)}%`}
+                      />
+                    )}
+                    {viewDrive.eligibilityCriteria!.allowedDepartmentNames?.length ? (
+                      <EligRow
+                        label="Departments"
+                        value={viewDrive.eligibilityCriteria!.allowedDepartmentNames.join(', ')}
+                      />
+                    ) : (
+                      <EligRow label="Departments" value="All departments" />
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {viewDrive.jobDescription && (
+              <div>
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">
+                  Description / Instructions
+                </p>
+                <p className="text-[14px] text-neutral-600 leading-relaxed whitespace-pre-wrap">
+                  {viewDrive.jobDescription}
+                </p>
+              </div>
+            )}
+
+            {viewDrive.location && (
+              <p className="flex items-center gap-1.5 text-[13.5px] text-neutral-500">
+                <MapPin size={14} className="text-neutral-400 shrink-0" />
+                {viewDrive.location}
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Set Eligibility ── */}
+      <Modal
+        isOpen={!!eligDrive}
+        onClose={() => !eligSaving && setEligDrive(null)}
+        title={eligDrive ? `Eligibility — ${eligDrive.companyName}` : 'Eligibility'}
+        description={eligDrive ? `Set criteria for the ${eligDrive.jobRole} drive.` : ''}
+        size="md"
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setEligDrive(null)} disabled={eligSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleEligibility} loading={eligSaving}>
+              Save Eligibility
+            </Button>
+          </>
+        }
+      >
+        {eligError && (
+          <div className="mb-4 rounded-[12px] border border-danger-200 bg-danger-50 px-4 py-3 text-[13.5px] text-danger-700">
+            {eligError}
+          </div>
+        )}
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+          Academic Thresholds
+        </p>
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <Input
+            label="Minimum CGPA"
+            type="number"
+            min="0"
+            max="10"
+            step="0.01"
+            placeholder="e.g. 7.5"
+            value={eligForm.minCgpa}
+            onChange={(e) => setEligForm({ ...eligForm, minCgpa: e.target.value })}
+          />
+          <Input
+            label="Max Active Backlogs"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="e.g. 0"
+            value={eligForm.maxActiveBacklogs}
+            onChange={(e) => setEligForm({ ...eligForm, maxActiveBacklogs: e.target.value })}
+          />
+          <Input
+            label="10th Percentage"
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            placeholder="e.g. 60"
+            value={eligForm.minTenthPct}
+            onChange={(e) => setEligForm({ ...eligForm, minTenthPct: e.target.value })}
+          />
+          <Input
+            label="12th Percentage"
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            placeholder="e.g. 60"
+            value={eligForm.minTwelfthPct}
+            onChange={(e) => setEligForm({ ...eligForm, minTwelfthPct: e.target.value })}
+          />
+          <Input
+            label="Diploma Percentage"
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            placeholder="e.g. 60"
+            value={eligForm.minDiplomaPct}
+            onChange={(e) => setEligForm({ ...eligForm, minDiplomaPct: e.target.value })}
+          />
+        </div>
+
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
+          Eligible Departments
+        </p>
+        <p className="text-[13px] text-neutral-500 mb-3">
+          Leave unticked to allow students from all departments, or select the departments that can
+          apply.
+        </p>
+        {departments.length > 6 && (
+          <div className="relative mb-3">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <input
+              type="text"
+              value={deptSearch}
+              onChange={(e) => setDeptSearch(e.target.value)}
+              placeholder="Search departments..."
+              className="w-full pl-9 pr-3 py-2 text-[13.5px] rounded-[10px] border border-neutral-300 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
+            />
+          </div>
+        )}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[13px] text-neutral-500">
+            {eligForm.allowedDepartmentIds.length} selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="text-[12.5px] font-medium text-primary-600 hover:text-primary-700 hover:underline"
+              onClick={() => setEligForm({ ...eligForm, allowedDepartmentIds: departments.map((d) => d.id) })}
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              className="text-[12.5px] font-medium text-neutral-500 hover:text-neutral-700 hover:underline"
+              onClick={() => setEligForm({ ...eligForm, allowedDepartmentIds: [] })}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        <div className="max-h-52 overflow-y-auto rounded-[12px] border border-neutral-200/80 divide-y divide-neutral-100/80">
+          {filteredDepartments.length === 0 ? (
+            <p className="px-4 py-5 text-center text-[13px] text-neutral-400">
+              No departments found.
+            </p>
+          ) : (
+            filteredDepartments.map((dept) => {
+              const checked = eligForm.allowedDepartmentIds.includes(dept.id);
+              return (
+                <label
+                  key={dept.id}
+                  className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-neutral-50/80 transition-colors"
+                >
+                  <span className="text-neutral-500 shrink-0">
+                    {checked ? (
+                      <CheckSquare size={17} className="text-primary-600" />
+                    ) : (
+                      <Square size={17} />
+                    )}
+                  </span>
+                  <span className="text-[14px] text-neutral-700">{dept.name}</span>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={checked}
+                    onChange={() => toggleDept(dept.id)}
+                  />
+                </label>
+              );
+            })
+          )}
+        </div>
+      </Modal>
+
+      {/* ── Status Confirmations ── */}
       <ConfirmDialog
-        isOpen={!!confirmAction}
-        onClose={() => setConfirmAction(null)}
-        onConfirm={executeStatusChange}
-        title={`${confirmAction?.action === 'open' ? 'Open' : confirmAction?.action === 'close' ? 'Close' : 'Cancel'} Drive`}
-        message={`Are you sure you want to ${confirmAction?.action} this drive for "${confirmAction?.drive.companyName}"?`}
-        confirmLabel={confirmAction?.action === 'cancel' ? 'Cancel Drive' : 'Confirm'}
-        variant={confirmAction?.action === 'cancel' ? 'danger' : 'primary'}
-        loading={actionLoading}
+        isOpen={!!confirm}
+        onClose={() => setConfirm(null)}
+        onConfirm={runConfirmedStatus}
+        title={confirm?.action === 'close' ? 'Close Registration' : 'Cancel Drive'}
+        message={
+          confirm
+            ? confirm.action === 'close'
+              ? `Stop accepting registrations for the "${confirm.drive.companyName}" drive?`
+              : `Cancel the "${confirm.drive.companyName}" drive? This will mark it as cancelled for students.`
+            : ''
+        }
+        confirmLabel={confirm?.action === 'cancel' ? 'Cancel Drive' : 'Close Registration'}
+        variant={confirm?.action === 'cancel' ? 'danger' : 'primary'}
+        loading={actionSaving}
       />
     </PageContainer>
+  );
+}
+
+function EligRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-[13px] text-neutral-500">{label}</span>
+      <span className="text-[13.5px] font-semibold text-neutral-800 text-right">{value}</span>
+    </div>
   );
 }

@@ -8,12 +8,12 @@ interface RoleCardProps {
 
 export default function RoleCard({ icon, title, description }: RoleCardProps) {
   return (
-    <div className="group rounded-xl border border-neutral-200/70 bg-white p-6 shadow-card transition-all duration-200 hover:border-primary-200 hover:shadow-raised hover:-translate-y-1">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-brand-navy text-white transition-colors duration-200 group-hover:bg-primary-600">
+    <div className="group bg-white rounded-[14px] border border-neutral-200/60 p-6 shadow-card transition-all duration-300 hover:shadow-raised hover:-translate-y-0.5 hover:border-primary-200/60">
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-[10px] bg-neutral-900 text-white transition-all duration-300 group-hover:bg-primary-500 group-hover:shadow-soft">
         {icon}
       </div>
-      <h3 className="text-[16px] font-semibold text-neutral-900">{title}</h3>
-      <p className="mt-1.5 text-[14px] leading-relaxed text-neutral-600">
+      <h3 className="text-[15px] font-semibold text-neutral-900">{title}</h3>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-text-secondary">
         {description}
       </p>
     </div>

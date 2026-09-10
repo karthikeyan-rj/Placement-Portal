@@ -1,453 +1,498 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useDevMode } from '../../context/DevModeContext';
+import { useEffectiveRole } from '../../hooks/useEffectiveRole';
+import { Avatar, Breadcrumb, type BreadcrumbSegment } from '../ui';
 import {
-  LayoutDashboard,
-  Users,
-  Building2,
-  GraduationCap,
-  MessageSquare,
-  FileText,
-  Briefcase,
-  Mail,
-  ClipboardList,
-  ShieldCheck,
-  BarChart3,
-  LogOut,
-  Menu,
-  X,
-  ChevronRight,
-  PanelLeftClose,
-  PanelLeftOpen,
-  type LucideIcon,
-} from 'lucide-react';
+  NAV_GROUPS,
+  roleLabels,
+  getBreadcrumbTitle,
+  isGroupActive,
+  isPathActive,
+  type NavGroup,
+  type NavItem,
+} from '../../config/navigation';
+import { Menu, X, ChevronDown, LogOut, User, Lock } from 'lucide-react';
 
-interface NavItem {
-  label: string;
-  path: string;
-  icon: LucideIcon;
+const TOPBAR_H = 70;
+
+function getBreadcrumbs(pathname: string): BreadcrumbSegment[] {
+  const segments: BreadcrumbSegment[] = [{ label: 'Dashboard', path: '/dashboard' }];
+  if (pathname !== '/dashboard') {
+    segments.push({ label: getBreadcrumbTitle(pathname) });
+  }
+  return segments;
 }
 
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
-
-const DESKTOP_BREAKPOINT = 1024;
-const EXPANDED_W = 260;
-const COLLAPSED_W = 76;
-const STORAGE_KEY = 'placement-sidebar-collapsed';
-
-const roleNavGroups: Record<string, NavGroup[]> = {
-  PO: [
-    {
-      label: 'Overview',
-      items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
-    },
-    {
-      label: 'Management',
-      items: [
-        { label: 'Students', path: '/students', icon: Users },
-        { label: 'Departments', path: '/departments', icon: Building2 },
-        { label: 'PC Management', path: '/pc-management', icon: ShieldCheck },
-        { label: 'PR Management', path: '/pr-management', icon: GraduationCap },
-        { label: 'Companies', path: '/companies', icon: Briefcase },
-        { label: 'Placement Drives', path: '/placement-drives', icon: ClipboardList },
-      ],
-    },
-    {
-      label: 'Communication',
-      items: [{ label: 'Messages', path: '/messages', icon: MessageSquare }],
-    },
-    {
-      label: 'Insights',
-      items: [
-        { label: 'Reports', path: '/reports', icon: BarChart3 },
-        { label: 'Audit Logs', path: '/audit-logs', icon: FileText },
-      ],
-    },
-  ],
-  PC: [
-    {
-      label: 'Overview',
-      items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
-    },
-    {
-      label: 'Management',
-      items: [
-        { label: 'Students', path: '/students', icon: Users },
-        { label: 'Companies', path: '/companies', icon: Briefcase },
-        { label: 'Placement Drives', path: '/placement-drives', icon: ClipboardList },
-      ],
-    },
-    {
-      label: 'Communication',
-      items: [
-        { label: 'Messages', path: '/messages', icon: MessageSquare },
-        { label: 'Contact Requests', path: '/contact-requests', icon: Mail },
-      ],
-    },
-    {
-      label: 'Insights',
-      items: [{ label: 'Reports', path: '/reports', icon: BarChart3 }],
-    },
-  ],
-  PR: [
-    {
-      label: 'Overview',
-      items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
-    },
-    {
-      label: 'Management',
-      items: [{ label: 'Students', path: '/students', icon: Users }],
-    },
-    {
-      label: 'Communication',
-      items: [
-        { label: 'Messages', path: '/messages', icon: MessageSquare },
-        { label: 'Contact Requests', path: '/contact-requests', icon: Mail },
-      ],
-    },
-  ],
-  STUDENT: [
-    {
-      label: 'Overview',
-      items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
-    },
-    {
-      label: 'Placement',
-      items: [
-        { label: 'My Profile', path: '/profile', icon: GraduationCap },
-        { label: 'Placement Drives', path: '/student/drives', icon: ClipboardList },
-        { label: 'My Interviews', path: '/interviews', icon: Briefcase },
-      ],
-    },
-    {
-      label: 'Communication',
-      items: [
-        { label: 'Messages', path: '/messages', icon: MessageSquare },
-        { label: 'Contact Requests', path: '/contact-requests', icon: Mail },
-      ],
-    },
-  ],
-};
-
-const roleLabels: Record<string, string> = {
-  PO: 'Administrator',
-  PC: 'Coordinator',
-  PR: 'Representative',
-  STUDENT: 'Student',
-};
-
-const pageTitles: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/students': 'Students',
-  '/departments': 'Departments',
-  '/pc-management': 'PC Management',
-  '/pr-management': 'PR Management',
-  '/companies': 'Companies',
-  '/placement-drives': 'Placement Drives',
-  '/messages': 'Messages',
-  '/reports': 'Reports',
-  '/audit-logs': 'Audit Logs',
-  '/contact-requests': 'Contact Requests',
-  '/profile': 'My Profile',
-  '/interviews': 'My Interviews',
-  '/student/drives': 'Placement Drives',
-  '/student/interviews': 'My Interviews',
-};
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-function isPathActive(pathname: string, itemPath: string): boolean {
+function NavUnderline() {
   return (
-    pathname === itemPath ||
-    (itemPath === '/dashboard' && pathname === '/')
+    <span className="absolute left-1/2 bottom-[3px] -translate-x-1/2 h-[3px] w-5 rounded-full bg-primary-500" />
+  );
+}
+
+interface GroupDropdownProps {
+  group: NavGroup;
+  pathname: string;
+  open: boolean;
+  active: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onNavigate: (path: string) => void;
+}
+
+function GroupDropdown({ group, pathname, open, active, onToggle, onClose, onNavigate }: GroupDropdownProps) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [focusIndex, setFocusIndex] = useState(-1);
+
+  useEffect(() => {
+    if (open && focusIndex >= 0 && itemRefs.current[focusIndex]) {
+      itemRefs.current[focusIndex]?.focus();
+    }
+  }, [focusIndex, open]);
+
+  const handleTriggerKey = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onToggle();
+        setFocusIndex(0);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+      triggerRef.current?.focus();
+    }
+  };
+
+  const handleItemKey = (e: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+      triggerRef.current?.focus();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusIndex((focusIndex + 1) % group.items.length);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusIndex((focusIndex - 1 + group.items.length) % group.items.length);
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onNavigate(group.items[index].path);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={onToggle}
+        onKeyDown={handleTriggerKey}
+        aria-haspopup="true"
+        aria-expanded={open}
+        className={`relative h-[40px] px-3.5 rounded-[10px] text-[14px] font-medium flex items-center gap-1.5 transition-all duration-150 ${
+          active || open
+            ? 'text-primary-700 bg-primary-50/70'
+            : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/70'
+        }`}
+      >
+        {group.label}
+        <ChevronDown
+          size={15}
+          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''} ${
+            active || open ? 'text-primary-500' : 'text-neutral-400'
+          }`}
+        />
+        {(active || open) && <NavUnderline />}
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-0 top-full mt-2 z-50 w-60 glass-strong rounded-[14px] border border-white/40 shadow-overlay py-1.5 animate-slideDown"
+          role="menu"
+          aria-label={group.label}
+        >
+          {group.items.map((item, index) => {
+            const itemActive = isPathActive(pathname, item);
+            return (
+              <button
+                key={item.path}
+                ref={(el) => {
+                  itemRefs.current[index] = el;
+                }}
+                type="button"
+                role="menuitem"
+                onClick={() => onNavigate(item.path)}
+                onKeyDown={(e) => handleItemKey(e, index)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 my-0.5 text-[14px] text-left rounded-[10px] transition-colors outline-none ${
+                  itemActive
+                    ? 'bg-primary-50/80 text-primary-700 font-medium'
+                    : 'text-neutral-700 hover:bg-neutral-100/70 hover:text-neutral-900'
+                }`}
+              >
+                <span className={`shrink-0 ${itemActive ? 'text-primary-500' : 'text-neutral-400'}`}>
+                  <item.icon size={17} />
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SingleLinkProps {
+  item: NavItem;
+  active: boolean;
+  onNavigate: (path: string) => void;
+}
+
+function SingleLink({ item, active, onNavigate }: SingleLinkProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(item.path)}
+      className={`relative h-[40px] px-3.5 rounded-[10px] text-[14px] font-medium flex items-center transition-all duration-150 ${
+        active ? 'text-primary-700 bg-primary-50/70' : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/70'
+      }`}
+    >
+      {item.label}
+      {active && <NavUnderline />}
+    </button>
   );
 }
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { isPreviewing, exitPreview } = useDevMode();
+  const effectiveRole = useEffectiveRole();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Desktop collapse state is centralized HERE and persisted to localStorage.
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'false');
-    } catch {
-      return false;
-    }
-  });
-  // Mobile drawer state.
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const groups = roleNavGroups[user?.role || 'STUDENT'] || [];
-  const pageTitle = pageTitles[location.pathname] || 'Page';
-  const role = user?.role || 'STUDENT';
+  const topNavRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
+  const role = (effectiveRole || 'STUDENT') as keyof typeof NAV_GROUPS;
+  const groups = NAV_GROUPS[role] || [];
+  const breadcrumbs = getBreadcrumbs(location.pathname);
+  const displayName = user?.name || (isPreviewing ? 'Preview' : 'User');
+  const isStudent = role === 'STUDENT';
+
+  const closeMenus = () => {
+    setOpenGroup(null);
+    setProfileOpen(false);
+  };
+
+  const handleNavigate = (path: string) => {
+    closeMenus();
+    setMobileOpen(false);
+    navigate(path);
+  };
 
   const handleLogout = () => {
+    closeMenus();
+    setMobileOpen(false);
+    if (isPreviewing) {
+      exitPreview();
+      navigate('/');
+      return;
+    }
     logout();
-    navigate('/');
+    navigate('/login', { replace: true });
   };
 
-  const closeMobile = useCallback(() => setMobileOpen(false), []);
+  useEffect(() => {
+    closeMenus();
+    setMobileOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
-  const handleNav = useCallback(
-    (path: string) => {
-      navigate(path);
-      closeMobile();
-    },
-    [navigate, closeMobile],
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (topNavRef.current && !topNavRef.current.contains(target)) {
+        setOpenGroup(null);
+      }
+      if (profileRef.current && !profileRef.current.contains(target)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenGroup(null);
+        setProfileOpen(false);
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [mobileOpen]);
+
+  const brand = (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-gradient-to-br from-primary-500 to-primary-700 text-white font-bold text-[14px] shrink-0 shadow-soft">
+        PP
+      </div>
+      <p className="text-[18px] font-semibold text-neutral-900 leading-tight whitespace-nowrap tracking-tight">
+        Placement Portal
+      </p>
+    </div>
   );
 
-  // Close the mobile drawer whenever the route changes.
-  useEffect(() => {
-    closeMobile();
-  }, [location.pathname, closeMobile]);
-
-  // Close the mobile drawer when resizing into the desktop breakpoint.
-  useEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
-    const onResize = () => {
-      if (mq.matches) setMobileOpen(false);
-    };
-    onResize();
-    mq.addEventListener('change', onResize);
-    return () => mq.removeEventListener('change', onResize);
-  }, []);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileOpen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  const sidebarWidth = collapsed ? COLLAPSED_W : EXPANDED_W;
-
-  const renderItem = (item: NavItem, expanded: boolean) => {
-    const isActive = isPathActive(location.pathname, item.path);
-    const Icon = item.icon;
-    return (
-      <button
-        key={item.path}
-        onClick={() => handleNav(item.path)}
-        aria-label={item.label}
-        className={`group relative w-full flex items-center gap-2.5 h-[42px] rounded-[8px] text-[14px] font-medium transition-all duration-200 ${
-          isActive
-            ? 'bg-primary-500/15 text-white'
-            : 'text-info-soft/80 hover:bg-sidebar-hover hover:text-white'
-        } ${expanded ? 'px-3' : 'px-0 justify-center'}`}
-      >
-        {isActive && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-[18px] w-[3px] rounded-r-full bg-primary-500" />
-        )}
-        <Icon
-          size={18}
-          strokeWidth={isActive ? 2 : 1.75}
-          className={
-            isActive ? 'text-primary-300 shrink-0' : 'text-info-soft/60 group-hover:text-info-soft shrink-0'
-          }
-        />
-        <span
-          className={`truncate transition-opacity duration-200 overflow-hidden ${expanded ? 'opacity-100' : 'opacity-0 w-0'}`}
-        >
-          {item.label}
-        </span>
-
-        {!expanded && (
-          <span
-            role="tooltip"
-            className="pointer-events-none absolute left-full ml-4 top-1/2 -translate-y-1/2 hidden lg:group-hover:block whitespace-nowrap rounded-[6px] bg-neutral-900 px-2.5 py-1.5 text-[12px] font-medium text-white shadow-overlay"
-            style={{ zIndex: 60 }}
-          >
-            {item.label}
-          </span>
-        )}
-      </button>
+  const renderGroup = (group: NavGroup) =>
+    group.items.length === 1 ? (
+      <SingleLink
+        key={group.items[0].path}
+        item={group.items[0]}
+        active={isPathActive(location.pathname, group.items[0])}
+        onNavigate={handleNavigate}
+      />
+    ) : (
+      <GroupDropdown
+        key={group.label}
+        group={group}
+        pathname={location.pathname}
+        open={openGroup === group.label}
+        active={isGroupActive(location.pathname, group)}
+        onToggle={() => setOpenGroup(openGroup === group.label ? null : group.label)}
+        onClose={() => setOpenGroup(null)}
+        onNavigate={handleNavigate}
+      />
     );
-  };
 
-  const sidebarInner = (expanded: boolean) => (
-    <div
-      className="flex flex-col h-full bg-sidebar text-white transition-[width] duration-200 overflow-hidden"
-      style={{ width: expanded ? EXPANDED_W : COLLAPSED_W }}
+  const desktopNav = (
+    <nav ref={topNavRef} aria-label="Primary" className="hidden lg:flex items-center gap-1 ml-8">
+      {groups.map(renderGroup)}
+    </nav>
+  );
+
+  const profileMenuButton = (
+    <button
+      type="button"
+      onClick={() => {
+        setProfileOpen((prev) => !prev);
+        setOpenGroup(null);
+      }}
+      aria-haspopup="true"
+      aria-expanded={profileOpen}
+      className={`relative flex items-center gap-2.5 rounded-[12px] px-2 py-1.5 transition-all duration-150 outline-none ${
+        profileOpen ? 'bg-neutral-100/80' : 'hover:bg-neutral-100/70'
+      }`}
     >
-      {/* Brand */}
-      <div
-        className={`flex items-center h-[72px] border-b border-white/10 transition-[padding] duration-200 ${
-          expanded ? 'px-5' : 'px-0 justify-center'
-        }`}
-      >
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-primary-500 text-white font-bold text-sm shrink-0">
-            PP
-          </div>
-          <div className={`min-w-0 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0'}`}>
-            <h1 className="text-[15px] font-semibold text-white leading-tight whitespace-nowrap">
-              Placement Portal
-            </h1>
-            <p className="text-[11.5px] text-info-soft/60 leading-tight mt-0.5 whitespace-nowrap">
-              Placement Management
-            </p>
-          </div>
-        </div>
+      <Avatar name={displayName} size="sm" />
+      <div className="hidden sm:block text-left">
+        <p className="text-[14px] font-semibold text-neutral-900 leading-tight max-w-[160px] truncate">{displayName}</p>
+        <p className="text-[12px] text-neutral-400 leading-tight mt-0.5">{roleLabels[role]}</p>
       </div>
+      <ChevronDown
+        size={15}
+        className={`hidden sm:block text-neutral-400 transition-transform duration-150 ${profileOpen ? 'rotate-180' : ''}`}
+      />
+    </button>
+  );
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
-        {groups.map((group, gi) => (
-          <div key={group.label} className={gi > 0 ? 'mt-7' : 'mt-1'}>
-            {expanded && (
-              <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-info-soft/45">
-                {group.label}
-              </p>
-            )}
-            <div className="space-y-1">{group.items.map((item) => renderItem(item, expanded))}</div>
-          </div>
-        ))}
-      </nav>
-
-      {/* Profile */}
-      <div className="border-t border-white/10 px-3 py-4">
-        {expanded ? (
-          <div className="flex items-center gap-3 px-2">
-            <div className="flex items-center justify-center w-9 h-9 rounded-full bg-info-500 text-white text-xs font-semibold shrink-0">
-              {user?.name ? getInitials(user.name) : 'U'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] font-semibold text-white truncate leading-tight">
-                {user?.name || 'User'}
-              </p>
-              <p className="text-[12px] text-info-soft/60 leading-tight mt-0.5">
-                {roleLabels[role]}
-              </p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-lg text-info-soft/60 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-full bg-info-500 text-white text-xs font-semibold shrink-0">
-              {user?.name ? getInitials(user.name) : 'U'}
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-lg text-info-soft/60 hover:text-white hover:bg-white/10 transition-colors"
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        )}
+  const profileMenu = (
+    <div
+      className="absolute right-0 top-full mt-2 z-50 w-60 glass-strong rounded-[14px] border border-white/40 shadow-overlay py-1.5 animate-slideDown"
+      role="menu"
+    >
+      <div className="px-3.5 py-2.5 border-b border-neutral-100/60 mb-1">
+        <p className="text-[14px] font-semibold text-neutral-900 truncate">{displayName}</p>
+        <p className="text-[12px] text-neutral-400 truncate mt-0.5">{user?.email || roleLabels[role]}</p>
+      </div>
+      {isStudent && (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => handleNavigate('/profile')}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 my-0.5 text-[14px] text-left rounded-[10px] text-neutral-700 hover:bg-neutral-100/70 transition-colors"
+          >
+            <User size={15} className="text-neutral-400 shrink-0" />
+            My Profile
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeMenus();
+              navigate('/profile', { state: { security: true } });
+            }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 my-0.5 text-[14px] text-left rounded-[10px] text-neutral-700 hover:bg-neutral-100/70 transition-colors"
+          >
+            <Lock size={15} className="text-neutral-400 shrink-0" />
+            Change Password / Security
+          </button>
+        </>
+      )}
+      <div className="border-t border-neutral-100/60 mt-1 pt-1">
+        <button
+          type="button"
+          role="menuitem"
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 my-0.5 text-[14px] text-left rounded-[10px] text-danger-600 hover:bg-danger-50/60 transition-colors"
+        >
+          <LogOut size={15} className="shrink-0" />
+          Logout
+        </button>
       </div>
     </div>
   );
 
-  const mobileDrawer = mobileOpen && (
+  const mobileMenu = mobileOpen && (
     <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-neutral-900/60 animate-fadeIn" onClick={closeMobile} />
-      <div className="absolute inset-y-0 left-0 animate-slideRight shadow-overlay">
-        <button
-          onClick={closeMobile}
-          className="absolute top-4 right-4 z-20 p-1.5 rounded-md text-info-soft/80 hover:text-white hover:bg-white/10 transition-colors"
-          aria-label="Close menu"
-        >
-          <X size={18} />
-        </button>
-        {sidebarInner(true)}
+      <div
+        className="absolute inset-0 bg-dark/50 backdrop-blur-sm animate-fadeIn"
+        onClick={() => setMobileOpen(false)}
+      />
+      <div className="absolute inset-y-0 right-0 w-[320px] max-w-[88vw] bg-white shadow-overlay animate-slideInRight flex flex-col">
+        <div className="flex items-center justify-between border-b border-neutral-200/60 px-4 py-3 shrink-0">
+          {brand}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="p-2 -mr-1 rounded-[10px] text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors"
+            aria-label="Close menu"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <nav aria-label="Primary" className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
+          {groups.map((group) => {
+            const groupActive = isGroupActive(location.pathname, group);
+            return (
+              <div key={group.label} className="mb-5">
+                <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+                  {group.label}
+                </p>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const itemActive = isPathActive(location.pathname, item);
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.path}
+                        type="button"
+                        onClick={() => handleNavigate(item.path)}
+                        className={`w-full flex items-center gap-3 h-11 px-3.5 rounded-[10px] text-[14px] font-medium transition-colors ${
+                          groupActive && itemActive
+                            ? 'bg-primary-50/80 text-primary-700'
+                            : 'text-neutral-700 hover:bg-neutral-100/70'
+                        }`}
+                      >
+                        <Icon size={17} className={groupActive && itemActive ? 'text-primary-500' : 'text-neutral-400'} />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-neutral-200/60 px-3 py-3 shrink-0">
+          <div className="flex items-center gap-3 px-2 py-1.5">
+            <Avatar name={displayName} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-semibold text-neutral-900 truncate leading-tight">{displayName}</p>
+              <p className="text-[12px] text-neutral-400 leading-tight mt-0.5">{roleLabels[role]}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="p-2.5 rounded-[10px] text-neutral-400 hover:text-danger-600 hover:bg-danger-50/60 transition-colors"
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut size={17} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      {/* Desktop sidebar */}
-      <aside
-        className="hidden lg:flex lg:flex-col shrink-0 transition-[width] duration-200"
-        style={{ width: sidebarWidth }}
+    <div className="flex flex-col h-screen app-bg overflow-hidden">
+      <header
+        className="sticky top-0 z-40 shrink-0 border-b border-neutral-200/70 bg-white/85 backdrop-blur-md shadow-soft"
+        style={{ height: TOPBAR_H }}
       >
-        {sidebarInner(!collapsed)}
-      </aside>
+        <div className="mx-auto w-full max-w-[1500px] h-full flex items-center justify-between px-4 sm:px-6 lg:px-8 gap-4">
+          <div className="flex items-center min-w-0">{brand}</div>
 
-      {/* Mobile drawer */}
-      {mobileDrawer}
+          {desktopNav}
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
-        <header className="bg-white border-b border-border h-16 px-4 lg:px-6 flex items-center justify-between shrink-0 z-10">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Mobile menu button */}
+          <div className="flex items-center gap-1 shrink-0">
+            {isPreviewing && (
+              <span className="hidden sm:inline-flex rounded-full bg-accent-50 text-accent-500 px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ring-accent-300/30 mr-1">
+                Preview
+              </span>
+            )}
             <button
+              type="button"
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden p-2 -ml-1 rounded-[8px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
+              className="lg:hidden p-2.5 rounded-[10px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors"
               aria-label="Open menu"
             >
-              <Menu size={20} />
+              <Menu size={21} />
             </button>
-
-            {/* Desktop collapse toggle */}
-            <button
-              onClick={toggleCollapsed}
-              className="hidden lg:inline-flex p-2 -ml-1 rounded-[8px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-            </button>
-
-            <nav className="flex items-center gap-1.5 text-[14px] whitespace-nowrap">
-              <span className="text-neutral-400">Home</span>
-              <ChevronRight size={14} className="text-neutral-300 shrink-0" />
-              <span className="font-semibold text-neutral-700 truncate">{pageTitle}</span>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="hidden sm:block text-right">
-              <p className="text-[14px] font-semibold text-neutral-900 leading-tight">{user?.name}</p>
-              <p className="text-[13px] text-neutral-500 leading-tight mt-0.5">{roleLabels[role]}</p>
-            </div>
-            <div className="flex items-center justify-center w-9 h-9 rounded-full bg-brand-navy text-white text-xs font-semibold ring-1 ring-white/20">
-              {user?.name ? getInitials(user.name) : 'U'}
+            <div ref={profileRef} className="relative">
+              {profileMenuButton}
+              {profileOpen && profileMenu}
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Main */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="px-5 py-8 lg:px-8 lg:py-8">
-            <Outlet />
-          </div>
-        </main>
-      </div>
+      {mobileMenu}
+
+      <nav
+        aria-label="Breadcrumb"
+        className="shrink-0 border-b border-neutral-200/60 bg-white/60 backdrop-blur-sm px-4 sm:px-6 lg:px-8"
+      >
+        <div className="mx-auto w-full max-w-[1500px] py-2.5">
+          <Breadcrumb segments={breadcrumbs} />
+        </div>
+      </nav>
+
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="mx-auto w-full max-w-[1500px] px-4 sm:px-6 lg:px-8 py-6 sm:py-8 relative z-10">
+          <Outlet />
+        </div>
+      </main>
     </div>
   );
 }

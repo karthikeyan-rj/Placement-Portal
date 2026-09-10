@@ -1,62 +1,51 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { userApi, departmentApi } from '../../api/api';
-import type { Department } from '../../types';
-import {
-  Badge,
-  DataTable,
-  ErrorState,
-  PageHeader,
-  PageContainer,
-  StatCard,
-  Skeleton,
-  EmptyState,
-} from '../../components/ui';
-import { Users, Briefcase, Shield, Building2 } from 'lucide-react';
 import { getErrorMessage } from '../../api/axios';
-import type { LucideIcon } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { usePaginatedData } from '../../hooks/useApi';
+import type { Department, PlacementDrive, UserStats } from '../../types';
+import { Users, ShieldCheck, GraduationCap, Building2, CalendarClock } from 'lucide-react';
+import { Badge, PageContainer } from '../../components/ui';
+import {
+  DashboardEmpty,
+  DashboardError,
+  DashboardRowsSkeleton,
+  DashboardSection,
+  DriveRow,
+  MetricCard,
+  MetricsSkeleton,
+  SectionAction,
+  WelcomeHeader,
+} from '../../components/dashboard';
 
-interface StatsData {
-  totalStudents: number;
-  activeStudents: number;
-  totalPcs: number;
-  totalPrs: number;
-}
-
-interface StatItem {
-  label: string;
-  value: number;
-  icon: LucideIcon;
-  accent: 'teal' | 'navy';
-}
-
-const columns = [
-  {
-    key: 'name',
-    label: 'Department',
-    render: (d: Department) => (
-      <span className="font-medium text-neutral-900">{d.name}</span>
-    ),
-  },
-  {
-    key: 'prLimit',
-    label: 'PR Limit',
-    render: (d: Department) => (
-      <span className="text-neutral-600">{d.prLimit ?? '—'}</span>
-    ),
-  },
-  {
-    key: 'active',
-    label: 'Status',
-    render: (d: Department) => (
-      <Badge variant={d.active ? 'success' : 'neutral'} dot={true}>
-        {d.active ? 'Active' : 'Inactive'}
+function DepartmentRow({ department }: { department: Department }) {
+  return (
+    <Link
+      to="/departments"
+      className="flex items-center gap-3 px-5 py-4 border-b border-neutral-100/60 last:border-0 hover:bg-neutral-50/60 transition-colors block"
+    >
+      <span className="shrink-0 flex items-center justify-center w-10 h-10 rounded-[10px] bg-brand-navy-50 text-brand-navy-700">
+        <Building2 size={18} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] font-semibold text-neutral-900 truncate">{department.name}</p>
+        <p className="text-[13px] text-text-secondary mt-0.5 truncate">
+          {department.prLimit != null
+            ? `PR limit ${department.prLimit}`
+            : 'No PR limit configured'}
+        </p>
+      </div>
+      <Badge variant={department.active ? 'success' : 'neutral'} size="sm">
+        {department.active ? 'Active' : 'Inactive'}
       </Badge>
-    ),
-  },
-];
+    </Link>
+  );
+}
 
 export default function PODashboard() {
-  const [stats, setStats] = useState<StatsData | null>(null);
+  const { user } = useAuth();
+  const [stats, setStats] = useState<UserStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
@@ -64,118 +53,151 @@ export default function PODashboard() {
   const [deptLoading, setDeptLoading] = useState(true);
   const [deptError, setDeptError] = useState<string | null>(null);
 
+  const [retryKey, setRetryKey] = useState(0);
+
+  const drives = usePaginatedData<PlacementDrive>({
+    url: '/placement-drives',
+    params: { status: 'UPCOMING', size: 5 },
+    cacheTtl: 10_000,
+  });
+
   useEffect(() => {
+    let cancelled = false;
     setStatsLoading(true);
-    userApi.getStats()
+    setStatsError(null);
+    userApi
+      .getStats()
       .then((res) => {
-        setStats(res.data.data);
+        if (!cancelled) setStats(res.data.data);
       })
       .catch((err) => {
-        setStatsError(getErrorMessage(err));
+        if (!cancelled) setStatsError(getErrorMessage(err));
       })
       .finally(() => {
-        setStatsLoading(false);
+        if (!cancelled) setStatsLoading(false);
       });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [retryKey]);
 
   useEffect(() => {
+    let cancelled = false;
     setDeptLoading(true);
-    departmentApi.getAll()
+    setDeptError(null);
+    departmentApi
+      .getAll()
       .then((res) => {
-        setDepartments(res.data.data);
+        if (!cancelled) setDepartments(res.data.data);
       })
       .catch((err) => {
-        setDeptError(getErrorMessage(err));
+        if (!cancelled) setDeptError(getErrorMessage(err));
       })
       .finally(() => {
-        setDeptLoading(false);
+        if (!cancelled) setDeptLoading(false);
       });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [retryKey]);
 
-  const statItems: StatItem[] = [
-    {
-      label: 'Total Students',
-      value: stats?.totalStudents ?? 0,
-      icon: Users,
-      accent: 'navy',
-    },
-    {
-      label: 'Placement Coordinators',
-      value: stats?.totalPcs ?? 0,
-      icon: Briefcase,
-      accent: 'teal',
-    },
-    {
-      label: 'Placement Reps',
-      value: stats?.totalPrs ?? 0,
-      icon: Shield,
-      accent: 'navy',
-    },
-    {
-      label: 'Departments',
-      value: departments.length,
-      icon: Building2,
-      accent: 'teal',
-    },
-  ];
+  const activeDepartments = departments.filter((d) => d.active).length;
+  const displayName = user?.name || 'User';
+  const metricsReady = !statsLoading && !deptLoading;
+  const metricsError = statsError || deptError;
 
   return (
     <PageContainer className="space-y-6">
-      <PageHeader title="Dashboard" description="Overview of the placement system" />
+      <WelcomeHeader
+        name={displayName}
+        roleLabel="Placement Officer"
+        subtitle="Oversee students, coordinators and placement drives across every department."
+      />
 
-      {statsLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl border border-neutral-200/70 shadow-card p-5">
-              <Skeleton className="h-3 w-24 mb-4" />
-              <Skeleton className="h-8 w-14" />
-            </div>
-          ))}
-        </div>
-      ) : statsError ? (
-        <ErrorState title="Failed to load statistics" message={statsError} />
+      {!metricsReady ? (
+        <MetricsSkeleton />
+      ) : metricsError ? (
+        <DashboardError
+          title="Unable to load dashboard data"
+          description="We couldn't retrieve your overview right now."
+          onRetry={() => setRetryKey((k) => k + 1)}
+        />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {statItems.map((item) => (
-            <StatCard
-              key={item.label}
-              label={item.label}
-              value={item.value}
-              accent={item.accent}
-              icon={<item.icon size={20} />}
-            />
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <MetricCard
+            label="Total Students"
+            value={stats?.totalStudents ?? 0}
+            icon={Users}
+            sub={`${stats?.activeStudents ?? 0} active`}
+            href="/students"
+          />
+          <MetricCard
+            label="Placement Coordinators"
+            value={stats?.totalPcs ?? 0}
+            icon={ShieldCheck}
+            href="/pc-management"
+          />
+          <MetricCard
+            label="Placement Reps"
+            value={stats?.totalPrs ?? 0}
+            icon={GraduationCap}
+            href="/pr-management"
+          />
+          <MetricCard
+            label="Active Departments"
+            value={activeDepartments}
+            icon={Building2}
+            href="/departments"
+          />
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-neutral-200/70 shadow-card">
-        <div className="px-5 py-4 border-b border-neutral-100">
-          <h2 className="text-[15px] font-semibold text-neutral-900">Department Overview</h2>
-          <p className="text-[13px] text-neutral-500 mt-0.5">All academic departments in the system</p>
-        </div>
-        {deptLoading ? (
-          <div className="p-5">
-            <Skeleton className="h-72 w-full rounded-lg" />
-          </div>
-        ) : deptError ? (
-          <div className="p-6">
-            <ErrorState title="Failed to load departments" message={deptError} />
-          </div>
-        ) : departments.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              title="No departments found"
-              description="Departments will appear here once created."
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <DashboardSection
+          title="Upcoming Drives"
+          subtitle="Placement drives scheduled ahead"
+          action={<SectionAction label="View all" to="/placement-drives" />}
+          className="lg:col-span-2"
+        >
+          {drives.loading ? (
+            <DashboardRowsSkeleton />
+          ) : drives.error ? (
+            <DashboardError
+              title="Unable to load drives"
+              description="We couldn't retrieve placement drives right now."
+              onRetry={drives.refresh}
             />
-          </div>
-        ) : (
-          <DataTable
-            columns={columns}
-            data={departments}
-            rowKey={(d) => d.id}
-            emptyMessage="No departments found"
-          />
-        )}
+          ) : drives.data.length === 0 ? (
+            <DashboardEmpty
+              icon={CalendarClock}
+              title="No upcoming drive announcements"
+              description="When placement drives are scheduled ahead, they will appear here."
+            />
+          ) : (
+            drives.data.map((drive) => <DriveRow key={drive.id} drive={drive} to="/placement-drives" />)
+          )}
+        </DashboardSection>
+
+        <DashboardSection title="Department Overview" subtitle="Departments in the system">
+          {deptLoading ? (
+            <DashboardRowsSkeleton />
+          ) : deptError ? (
+            <DashboardError
+              title="Unable to load departments"
+              description="We couldn't retrieve the department list right now."
+            />
+          ) : departments.length === 0 ? (
+            <DashboardEmpty
+              icon={Building2}
+              title="No departments found"
+              description="Departments will appear here once they are created."
+            />
+          ) : (
+            departments
+              .slice(0, 5)
+              .map((department) => <DepartmentRow key={department.id} department={department} />)
+          )}
+        </DashboardSection>
       </div>
     </PageContainer>
   );
