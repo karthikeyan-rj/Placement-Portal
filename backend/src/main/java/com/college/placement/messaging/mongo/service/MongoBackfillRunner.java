@@ -12,10 +12,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.mongodb.core.BulkOperations;
-import org.springframework.data.mongodb.core.FindAndReplaceOptions;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -23,8 +20,10 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 @Slf4j
@@ -72,20 +71,26 @@ public class MongoBackfillRunner implements CommandLineRunner {
         long started = System.nanoTime();
         log.info("[MIGRATE] START");
         seedSequences();
-        long messages = backfillMessages();
-        long recipients = backfillRecipients();
-        long threads = backfillThreads();
-        long entries = backfillEntries();
+        Set<Long> existingMessages = existingIds("messages", "messageId");
+        Set<Long> existingThreads = existingIds("clarification_threads", "threadId");
+        Set<Long> existingEntries = existingIds("clarification_entries", "entryId");
+        Set<String> existingRecipients = existingRecipientKeys();
+        log.info("[MIGRATE] existing mongo docs messages={} recipients={} threads={} entries={}",
+                existingMessages.size(), existingRecipients.size(), existingThreads.size(), existingEntries.size());
+        long messages = backfillMessages(existingMessages);
+        long recipients = backfillRecipients(existingRecipients);
+        long threads = backfillThreads(existingThreads);
+        long entries = backfillEntries(existingEntries);
         double elapsedMs = (System.nanoTime() - started) / 1_000_000.0;
         log.info("[MIGRATE] DONE messages={} recipients={} threads={} entries={} elapsedMs={}",
                 messages, recipients, threads, entries, String.format("%.1f", elapsedMs));
     }
 
     private void seedSequences() {
-        sequenceService.seedIfAbsent("message", maxId("messages"));
-        sequenceService.seedIfAbsent("clarificationThread", maxId("clarification_threads"));
-        sequenceService.seedIfAbsent("clarificationEntry", maxId("clarification_entries"));
-        log.info("[MIGRATE] sequences seeded from postgres max ids");
+        sequenceService.seedToMax("message", maxId("messages"));
+        sequenceService.seedToMax("clarificationThread", maxId("clarification_threads"));
+        sequenceService.seedToMax("clarificationEntry", maxId("clarification_entries"));
+        log.info("[MIGRATE] sequences seeded to postgres max ids");
     }
 
     private long maxId(String table) {
@@ -94,7 +99,24 @@ public class MongoBackfillRunner implements CommandLineRunner {
         return value == null ? 0 : value;
     }
 
-    private long backfillMessages() {
+    private Set<Long> existingIds(String collection, String field) {
+        Set<Long> ids = new HashSet<>();
+        mongoTemplate.getCollection(collection)
+                .find().projection(new org.bson.Document(field, 1)).batchSize(10000)
+                .forEach(doc -> ids.add(doc.getLong(field)));
+        return ids;
+    }
+
+    private Set<String> existingRecipientKeys() {
+        Set<String> keys = new HashSet<>();
+        mongoTemplate.getCollection("message_recipients")
+                .find().projection(new org.bson.Document("messageId", 1).append("recipientUserId", 1))
+                .batchSize(10000)
+                .forEach(doc -> keys.add(doc.getLong("messageId") + ":" + doc.getLong("recipientUserId")));
+        return keys;
+    }
+
+    private long backfillMessages(Set<Long> existing) {
         long lastId = 0L;
         long total = 0L;
         List<Map<String, Object>> rows;
@@ -104,8 +126,13 @@ public class MongoBackfillRunner implements CommandLineRunner {
             for (Map<String, Object> row : rows) {
                 Object dept = row.get("sender_department_id");
                 Long senderId = longValue(row.get("sender_id"));
+                long id = longValue(row.get("id"));
+                if (existing.contains(id)) {
+                    lastId = id;
+                    continue;
+                }
                 docs.add(MongoMessage.builder()
-                        .messageId(longValue(row.get("id")))
+                        .messageId(id)
                         .senderUserId(senderId)
                         .senderRole((String) row.get("sender_role"))
                         .senderDepartmentId(dept == null ? null : longValue(dept))
@@ -115,16 +142,16 @@ public class MongoBackfillRunner implements CommandLineRunner {
                         .createdAt(asLocalDateTime(row.get("created_at")))
                         .updatedAt(asLocalDateTime(row.get("created_at")))
                         .build());
-                lastId = longValue(row.get("id"));
+                lastId = id;
             }
-            total += upsertByKey(docs, MongoMessage.class,
-                    doc -> Query.query(Criteria.where("messageId").is(doc.getMessageId())), 200);
+            total += insertMissing(docs, MongoMessage.class, MESSAGE_BATCH,
+                    MongoMessage::getMessageId, existing);
         } while (rows.size() == MESSAGE_BATCH);
         log.info("[MIGRATE] messages={}", total);
         return total;
     }
 
-    private long backfillRecipients() {
+    private long backfillRecipients(Set<String> existing) {
         Map<String, ReactionRow> reactions = loadReactions();
         long lastId = 0L;
         long total = 0L;
@@ -135,6 +162,10 @@ public class MongoBackfillRunner implements CommandLineRunner {
             for (Map<String, Object> row : rows) {
                 Long messageId = longValue(row.get("message_id"));
                 Long recipientId = longValue(row.get("recipient_id"));
+                if (existing.contains(messageId + ":" + recipientId)) {
+                    lastId = longValue(row.get("id"));
+                    continue;
+                }
                 ReactionRow reaction = reactions.get(key(messageId, recipientId));
                 docs.add(MongoMessageRecipient.builder()
                         .messageId(messageId)
@@ -148,10 +179,8 @@ public class MongoBackfillRunner implements CommandLineRunner {
                         .build());
                 lastId = longValue(row.get("id"));
             }
-            total += upsertByKey(docs, MongoMessageRecipient.class,
-                    doc -> Query.query(Criteria.where("messageId").is(doc.getMessageId())
-                            .and("recipientUserId").is(doc.getRecipientUserId())),
-                    RECIPIENT_BATCH);
+            total += insertMissing(docs, MongoMessageRecipient.class, RECIPIENT_BATCH,
+                    d -> d.getMessageId() + ":" + d.getRecipientUserId(), existing);
         } while (rows.size() == RECIPIENT_BATCH);
         log.info("[MIGRATE] recipients={}", total);
         return total;
@@ -171,7 +200,7 @@ public class MongoBackfillRunner implements CommandLineRunner {
         return reactions;
     }
 
-    private long backfillThreads() {
+    private long backfillThreads(Set<Long> existing) {
         long lastId = 0L;
         long total = 0L;
         List<Map<String, Object>> rows;
@@ -179,8 +208,13 @@ public class MongoBackfillRunner implements CommandLineRunner {
             rows = jdbcTemplate.queryForList(THREAD_SQL, lastId);
             List<MongoClarificationThread> docs = new ArrayList<>();
             for (Map<String, Object> row : rows) {
+                long id = longValue(row.get("id"));
+                if (existing.contains(id)) {
+                    lastId = id;
+                    continue;
+                }
                 docs.add(MongoClarificationThread.builder()
-                        .threadId(longValue(row.get("id")))
+                        .threadId(id)
                         .messageId(longValue(row.get("message_id")))
                         .requesterUserId(longValue(row.get("requester_id")))
                         .senderUserId(longValue(row.get("sender_id")))
@@ -188,16 +222,16 @@ public class MongoBackfillRunner implements CommandLineRunner {
                         .createdAt(asLocalDateTime(row.get("created_at")))
                         .updatedAt(asLocalDateTime(row.get("updated_at")))
                         .build());
-                lastId = longValue(row.get("id"));
+                lastId = id;
             }
-            total += upsertByKey(docs, MongoClarificationThread.class,
-                    doc -> Query.query(Criteria.where("threadId").is(doc.getThreadId())), THREAD_BATCH);
+            total += insertMissing(docs, MongoClarificationThread.class, THREAD_BATCH,
+                    MongoClarificationThread::getThreadId, existing);
         } while (rows.size() == THREAD_BATCH);
         log.info("[MIGRATE] threads={}", total);
         return total;
     }
 
-    private long backfillEntries() {
+    private long backfillEntries(Set<Long> existing) {
         long lastId = 0L;
         long total = 0L;
         List<Map<String, Object>> rows;
@@ -205,35 +239,47 @@ public class MongoBackfillRunner implements CommandLineRunner {
             rows = jdbcTemplate.queryForList(ENTRY_SQL, lastId);
             List<MongoClarificationEntry> docs = new ArrayList<>();
             for (Map<String, Object> row : rows) {
+                long id = longValue(row.get("id"));
+                if (existing.contains(id)) {
+                    lastId = id;
+                    continue;
+                }
                 docs.add(MongoClarificationEntry.builder()
-                        .entryId(longValue(row.get("id")))
+                        .entryId(id)
                         .threadId(longValue(row.get("thread_id")))
                         .authorUserId(longValue(row.get("author_id")))
                         .content((String) row.get("content"))
                         .createdAt(asLocalDateTime(row.get("created_at")))
                         .build());
-                lastId = longValue(row.get("id"));
+                lastId = id;
             }
-            total += upsertByKey(docs, MongoClarificationEntry.class,
-                    doc -> Query.query(Criteria.where("entryId").is(doc.getEntryId())), ENTRY_BATCH);
+            total += insertMissing(docs, MongoClarificationEntry.class, ENTRY_BATCH,
+                    MongoClarificationEntry::getEntryId, existing);
         } while (rows.size() == ENTRY_BATCH);
         log.info("[MIGRATE] entries={}", total);
         return total;
     }
 
-    private <T> long upsertByKey(List<T> docs, Class<T> type, Function<T, Query> keyQuery, int chunkSize) {
+    private <T> long insertMissing(List<T> docs, Class<T> type, int chunkSize,
+                                   Function<T, Object> keyOf, Set<?> existing) {
         if (docs.isEmpty()) {
             return 0L;
         }
-        for (int i = 0; i < docs.size(); i += chunkSize) {
-            List<T> slice = docs.subList(i, Math.min(docs.size(), i + chunkSize));
+        List<T> missing = docs.stream()
+                .filter(d -> !existing.contains(keyOf.apply(d)))
+                .toList();
+        if (missing.isEmpty()) {
+            return 0L;
+        }
+        for (int i = 0; i < missing.size(); i += chunkSize) {
+            List<T> slice = missing.subList(i, Math.min(missing.size(), i + chunkSize));
             BulkOperations bulk = mongoTemplate.bulkOps(BulkOperations.BulkMode.UNORDERED, type);
             for (T doc : slice) {
-                bulk.replaceOne(keyQuery.apply(doc), doc, FindAndReplaceOptions.options().upsert());
+                bulk.insert(doc);
             }
             bulk.execute();
         }
-        return docs.size();
+        return missing.size();
     }
 
     private static String key(Object messageId, Object userId) {

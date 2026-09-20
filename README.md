@@ -36,6 +36,7 @@ A full-stack college placement management and communication system built with **
 
 ### Database
 - PostgreSQL
+- MongoDB (messaging store)
 - Supabase
 
 ## Architecture
@@ -76,11 +77,36 @@ DATABASE_URL=
 DATABASE_USERNAME=
 DATABASE_PASSWORD=
 JWT_SECRET=
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=placement_portal
+APP_MESSAGING_STORAGE=mongo   # mongo (default) | postgres
+APP_MONGODB_ENABLED=true
+APP_MONGODB_REQUIRED=false    # true = fail startup if mongo is down/collections missing
+
+# One-off maintenance tools (all default OFF, read-only unless noted)
+MIGRATE_MESSAGES_TO_MONGO=false         # backfill PG -> Mongo (insert-missing only)
+VALIDATE_MESSAGES_MIGRATION=false       # compare PG vs Mongo (read-only)
+MONGO_PERF_PROBE=false                  # perf probe (read-only)
+MIGRATE_MESSAGES_MONGO_TO_POSTGRES=false # reverse migration tool
+MONGO_ROLLBACK_DRY_RUN=true             # run reverse migration without writing
 
 VITE_API_BASE_URL=http://localhost:8080/api
 ```
 
 Do not commit real credentials or `.env` files.
+
+## Message storage
+
+Messaging data is stored in **MongoDB** (authoritative). PostgreSQL keeps only the
+certified historical snapshot and is used solely as rollback storage; normal traffic
+never dual-writes. `APP_MESSAGING_STORAGE` selects the runtime store
+(`mongo` default; `postgres` is the explicit, fully-flagged fallback and is logged
+as `[MESSAGING] activeStorage=...` at startup).
+
+At startup the app verifies Mongo reachability and the four required collections
+(`messages`, `message_recipients`, `clarification_threads`, `clarification_entries`)
+plus the on-demand `mongo_sequences`. Set `APP_MONGODB_REQUIRED=true` in production so a
+down database aborts startup instead of failing lazily at request time.
 
 ## Roles
 

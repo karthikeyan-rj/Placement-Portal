@@ -5,12 +5,9 @@ import com.college.placement.common.enums.Role;
 import com.college.placement.common.exception.ForbiddenException;
 import com.college.placement.common.exception.ResourceNotFoundException;
 import com.college.placement.company.CompanyRepository;
-import com.college.placement.messaging.Message;
-import com.college.placement.messaging.MessageRecipient;
-import com.college.placement.messaging.MessageRecipientRepository;
-import com.college.placement.messaging.MessageReaction;
-import com.college.placement.messaging.MessageReactionRepository;
-import com.college.placement.messaging.MessageRepository;
+import com.college.placement.messaging.store.MessagingStore;
+import com.college.placement.messaging.store.MessagingStore.RecipientExportRow;
+import com.college.placement.messaging.store.MessagingStore.StoredMessage;
 import com.college.placement.placement.PlacementDriveRepository;
 import com.college.placement.placement.PlacementRecordRepository;
 import com.college.placement.report.dto.ReportSummaryResponse;
@@ -40,9 +37,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReportService {
 
-    private final MessageRepository messageRepository;
-    private final MessageRecipientRepository recipientRepository;
-    private final MessageReactionRepository reactionRepository;
+    private final MessagingStore messagingStore;
     private final PlacementRecordRepository placementRecordRepository;
     private final PlacementDriveRepository placementDriveRepository;
     private final CompanyRepository companyRepository;
@@ -148,18 +143,18 @@ public class ReportService {
     public void exportMessageAcknowledgements(Long messageId, HttpServletResponse response) throws Exception {
         securityUtils.requireAnyRole(Role.PO, Role.PC);
 
-        Message message = messageRepository.findById(messageId)
-                .orElseThrow(() -> new ResourceNotFoundException("Message", messageId));
+        StoredMessage message = messagingStore.getMessage(messageId);
+        if (message == null) {
+            throw new ResourceNotFoundException("Message", messageId);
+        }
 
-        List<MessageRecipient> recipients =
-                recipientRepository.findByMessageIdWithUserAndDepartment(messageId);
+        List<RecipientExportRow> recipients = messagingStore.recipientsForExport(messageId);
 
         if (securityUtils.isPC()) {
             Long currentDeptId = securityUtils.getCurrentUser().getDepartment() != null
                     ? securityUtils.getCurrentUser().getDepartment().getId() : null;
             boolean messageWithinDept = recipients.stream().allMatch(r ->
-                    r.getRecipient().getDepartment() != null
-                            && r.getRecipient().getDepartment().getId().equals(currentDeptId));
+                    r.departmentId() != null && r.departmentId().equals(currentDeptId));
             if (!messageWithinDept) {
                 throw new ForbiddenException("You can only export acknowledgements for messages within your department.");
             }
@@ -177,7 +172,7 @@ public class ReportService {
         });
 
         List<Long> recipientUserIds = recipients.stream()
-                .map(r -> r.getRecipient().getId())
+                .map(RecipientExportRow::userId)
                 .toList();
 
         Map<Long, String> registerByUser = new HashMap<>();
@@ -188,25 +183,17 @@ public class ReportService {
             }
         }
 
-        Map<Long, String> reactionByUser = new HashMap<>();
-        if (!recipientUserIds.isEmpty()) {
-            for (MessageReaction r : reactionRepository.findByMessageId(messageId)) {
-                reactionByUser.put(r.getUser().getId(), r.getReaction().name());
-            }
-        }
+        for (RecipientExportRow recipient : recipients) {
+            String registerNumber = registerByUser.getOrDefault(recipient.userId(), "");
+            String studentName = recipient.userName() != null ? recipient.userName() : "";
+            String department = recipient.departmentName() != null ? recipient.departmentName() : "N/A";
 
-        for (MessageRecipient recipient : recipients) {
-            String registerNumber = registerByUser.getOrDefault(recipient.getRecipient().getId(), "");
-            String studentName = recipient.getRecipient().getName();
-            String department = recipient.getRecipient().getDepartment() != null ?
-                    recipient.getRecipient().getDepartment().getName() : "N/A";
+            String deliveryStatus = recipient.delivered() ? "DELIVERED" : "PENDING";
+            String readStatus = recipient.read() ? "READ" : "UNREAD";
 
-            String deliveryStatus = recipient.getDeliveredAt() != null ? "DELIVERED" : "PENDING";
-            String readStatus = recipient.getReadAt() != null ? "READ" : "UNREAD";
+            String reaction = recipient.reaction() != null ? recipient.reaction() : "NONE";
 
-            String reaction = reactionByUser.getOrDefault(recipient.getRecipient().getId(), "NONE");
-
-            String timestamp = recipient.getCreatedAt() != null ? recipient.getCreatedAt().toString() : "";
+            String timestamp = recipient.createdAt() != null ? recipient.createdAt().toString() : "";
 
             csvWriter.writeNext(new String[]{
                     registerNumber, studentName, department,

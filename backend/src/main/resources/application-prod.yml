@@ -23,7 +23,7 @@ jwt:
 
 app:
   mongodb:
-    enabled: ${APP_MONGODB_ENABLED:false}
+    enabled: ${APP_MONGODB_ENABLED:true}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://localhost:4173}
 

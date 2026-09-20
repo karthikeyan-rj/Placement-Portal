@@ -17,4 +17,12 @@ public interface MongoClarificationThreadRepository extends MongoRepository<Mong
     List<MongoClarificationThread> findBySenderUserIdOrderByUpdatedAtDesc(Long senderUserId, Pageable pageable);
 
     List<MongoClarificationThread> findByRequesterUserIdOrderByUpdatedAtDesc(Long requesterUserId, Pageable pageable);
+
+    List<MongoClarificationThread> findByMessageIdOrderByUpdatedAtDesc(Long messageId, Pageable pageable);
+
+    long countByMessageId(Long messageId);
+
+    long countByMessageIdAndStatus(Long messageId, String status);
+
+    long countBySenderUserId(Long senderUserId);
 }

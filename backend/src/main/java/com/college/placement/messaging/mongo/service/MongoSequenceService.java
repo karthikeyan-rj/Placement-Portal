@@ -26,10 +26,10 @@ public class MongoSequenceService {
         return result == null ? 1 : result.getSequence();
     }
 
-    public void seedIfAbsent(String key, long value) {
+    public void seedToMax(String key, long value) {
         mongoTemplate.upsert(
                 Query.query(Criteria.where("_id").is(key)),
-                new Update().setOnInsert("sequence", value),
+                new Update().max("sequence", value),
                 MongoSequence.class);
     }
 }

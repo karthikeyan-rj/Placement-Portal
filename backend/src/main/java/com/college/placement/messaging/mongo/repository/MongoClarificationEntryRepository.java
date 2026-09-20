@@ -14,4 +14,6 @@ public interface MongoClarificationEntryRepository extends MongoRepository<Mongo
     Optional<MongoClarificationEntry> findByEntryId(Long entryId);
 
     List<MongoClarificationEntry> findByThreadId(Long threadId);
+
+    long countByThreadId(Long threadId);
 }

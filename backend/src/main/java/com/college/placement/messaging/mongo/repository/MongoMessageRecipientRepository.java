@@ -19,4 +19,14 @@ public interface MongoMessageRecipientRepository extends MongoRepository<MongoMe
     List<MongoMessageRecipient> findByRecipientUserIdOrderByCreatedAtDesc(Long recipientUserId, Pageable pageable);
 
     boolean existsByMessageIdAndRecipientUserId(Long messageId, Long recipientUserId);
+
+    long countByMessageId(Long messageId);
+
+    long countByMessageIdAndDeliveredAtNotNull(Long messageId);
+
+    long countByMessageIdAndReadAtNotNull(Long messageId);
+
+    long countByMessageIdAndReaction(Long messageId, String reaction);
+
+    long countByRecipientUserId(Long recipientUserId);
 }

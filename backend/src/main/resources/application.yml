@@ -37,13 +37,15 @@ app:
   seed-bulk-demo-data: ${SEED_BULK_DEMO_DATA:false}
   seed-bulk-demo-cleanup: ${SEED_BULK_DEMO_CLEANUP:false}
   messaging:
-    storage: ${APP_MESSAGING_STORAGE:postgres}
+    storage: ${APP_MESSAGING_STORAGE:mongo}
   mongodb:
     enabled: ${APP_MONGODB_ENABLED:true}
     required: ${APP_MONGODB_REQUIRED:false}
     migrate-enabled: ${MIGRATE_MESSAGES_TO_MONGO:false}
     validate-enabled: ${VALIDATE_MESSAGES_MIGRATION:false}
     perf-enabled: ${MONGO_PERF_PROBE:false}
+    rollback-enabled: ${MIGRATE_MESSAGES_MONGO_TO_POSTGRES:false}
+    rollback-dry-run: ${MONGO_ROLLBACK_DRY_RUN:true}
 
 springdoc:
   api-docs:
