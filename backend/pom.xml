@@ -55,6 +55,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- MongoDB (Phase 6F.1 foundation only; live messaging stays on PostgreSQL) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-mongodb</artifactId>
+        </dependency>
+
         <!-- H2 (dev only) -->
         <dependency>
             <groupId>com.h2database</groupId>

@@ -108,7 +108,7 @@ function App() {
                 <Route path="/reports" element={<SuspenseRoute><ReportsPage /></SuspenseRoute>} />
               </Route>
 
-              <Route element={<AuthorizedRoute allowedRoles={['PO', 'PC', 'PR']} />}>
+              <Route element={<AuthorizedRoute allowedRoles={['PO', 'PC', 'PR', 'STUDENT']} />}>
                 <Route path="/messages" element={<SuspenseRoute><MessagesPage /></SuspenseRoute>} />
               </Route>
 

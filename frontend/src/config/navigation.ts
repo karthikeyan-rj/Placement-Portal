@@ -118,6 +118,10 @@ export const NAV_GROUPS: Record<Role, NavGroup[]> = {
         { label: 'Interviews', path: '/student/interviews', icon: Briefcase, aliases: ['/interviews'] },
       ],
     },
+    {
+      label: 'Communication',
+      items: [{ label: 'Messages', path: '/messages', icon: MessageSquare }],
+    },
   ],
 };
 

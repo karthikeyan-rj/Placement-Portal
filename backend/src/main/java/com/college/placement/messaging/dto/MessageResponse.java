@@ -22,4 +22,9 @@ public class MessageResponse {
     private int readCount;
     private int upvoteCount;
     private int downvoteCount;
+    private long clarificationCount;
+    private long openClarificationCount;
+    private long answeredClarificationCount;
+    private boolean readByRecipient;
+    private String myReaction;
 }

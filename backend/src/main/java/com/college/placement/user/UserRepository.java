@@ -46,11 +46,31 @@ public interface UserRepository extends JpaRepository<User, Long> {
            nativeQuery = true)
     Page<User> searchUsersByDepartment(@Param("deptId") Long deptId, @Param("search") String search, Pageable pageable);
 
+    @Query(value = "SELECT u.* FROM users u WHERE u.active = true AND " +
+            "(:deptId IS NULL OR u.department_id = :deptId) AND " +
+            "(:role IS NULL OR u.role = :role) AND " +
+            "(:search IS NULL OR u.name ILIKE CONCAT('%', :search, '%') OR " +
+            "u.email ILIKE CONCAT('%', :search, '%'))",
+            countQuery = "SELECT COUNT(*) FROM users u WHERE u.active = true AND " +
+            "(:deptId IS NULL OR u.department_id = :deptId) AND " +
+            "(:role IS NULL OR u.role = :role) AND " +
+            "(:search IS NULL OR u.name ILIKE CONCAT('%', :search, '%') OR " +
+            "u.email ILIKE CONCAT('%', :search, '%'))",
+            nativeQuery = true)
+    Page<User> searchUsersScoped(@Param("deptId") Long deptId,
+                                  @Param("role") String role,
+                                  @Param("search") String search,
+                                  Pageable pageable);
+
     @Query("SELECT COUNT(u) FROM User u WHERE u.role = :role AND u.active = true")
     long countByRole(@Param("role") Role role);
 
     @Query("SELECT COUNT(u) FROM User u WHERE u.role = :role AND u.department.id = :deptId AND u.active = true")
     long countByRoleAndDepartment(@Param("role") Role role, @Param("deptId") Long deptId);
+
+    @Query(value = "SELECT COUNT(*) FROM users u JOIN student_profiles sp ON sp.user_id = u.id " +
+           "WHERE u.active = true AND u.role IN ('STUDENT','PR')", nativeQuery = true)
+    long countActiveStudentPopulation();
 
     long countByActiveTrue();
 }

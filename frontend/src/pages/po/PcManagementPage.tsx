@@ -7,6 +7,7 @@ import {
   Badge,
   Modal,
   DataTable,
+  Pagination,
   SearchInput,
   PageHeader,
   PageContainer,
@@ -26,7 +27,13 @@ const STATUS_OPTIONS = [
   { label: 'Inactive', value: 'inactive' },
 ];
 
+const CANDIDATE_ROLES = [
+  { label: 'Students', value: 'STUDENT' },
+  { label: 'PRs', value: 'PR' },
+];
+
 const MAX_PCS_PER_DEPT = 2;
+const CANDIDATE_PAGE_SIZE = 20;
 
 type AssignMode = 'new' | 'reassign';
 
@@ -35,10 +42,16 @@ export default function PcManagementPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(0);
 
-  const [users, setUsers] = useState<User[]>([]);
+  const [pcs, setPcs] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
+  // Authoritative PC snapshot (all departments) drives capacity + "full" labels.
+  const [allPcs, setAllPcs] = useState<User[]>([]);
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [deptLoading, setDeptLoading] = useState(true);
@@ -48,37 +61,110 @@ export default function PcManagementPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignMode, setAssignMode] = useState<AssignMode>('new');
   const [assignUser, setAssignUser] = useState<User | null>(null);
-  const [assignUserId, setAssignUserId] = useState('');
+  const [selectedCandidate, setSelectedCandidate] = useState<User | null>(null);
   const [assignDept, setAssignDept] = useState('');
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
+  // Candidate picker (server paginated + debounced search, no giant select)
+  const [candRole, setCandRole] = useState<'STUDENT' | 'PR'>('STUDENT');
+  const [candSearch, setCandSearch] = useState('');
+  const [candDebounced, setCandDebounced] = useState('');
+  const [candPage, setCandPage] = useState(0);
+  const [candidates, setCandidates] = useState<User[]>([]);
+  const [candLoading, setCandLoading] = useState(false);
+  const [candError, setCandError] = useState<string | null>(null);
+  const [candTotalPages, setCandTotalPages] = useState(0);
+  const [candTotalElements, setCandTotalElements] = useState(0);
+
   const [viewTarget, setViewTarget] = useState<User | null>(null);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchPcs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await userApi.getAll({ search: debouncedSearch || undefined, size: 1000 });
+      const res = await userApi.getAll({
+        role: 'PC',
+        departmentId: deptFilter && Number(deptFilter) ? Number(deptFilter) : undefined,
+        search: debouncedSearch || undefined,
+        page,
+        size: 20,
+      });
       const payload = res.data.data;
       const list = Array.isArray(payload) ? payload : 'content' in payload ? payload.content : [];
-      setUsers(list);
+      setPcs(list);
+      setTotalElements(Array.isArray(payload) ? list.length : payload.totalElements);
+      setTotalPages(Array.isArray(payload) ? 1 : payload.totalPages);
     } catch (err) {
       setError(getErrorMessage(err));
-      setUsers([]);
+      setPcs([]);
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch]);
+  }, [deptFilter, debouncedSearch, page]);
+
+  const fetchAllPcs = useCallback(async () => {
+    try {
+      const res = await userApi.getAll({ role: 'PC', page: 0, size: 100 });
+      const payload = res.data.data;
+      setAllPcs(Array.isArray(payload) ? payload : 'content' in payload ? payload.content : []);
+    } catch {
+      setAllPcs([]);
+    }
+  }, []);
+
+  const fetchCandidates = useCallback(async () => {
+    setCandLoading(true);
+    setCandError(null);
+    try {
+      const res = await userApi.getAll({
+        role: candRole,
+        search: candDebounced || undefined,
+        page: candPage,
+        size: CANDIDATE_PAGE_SIZE,
+      });
+      const payload = res.data.data;
+      const list = Array.isArray(payload) ? payload : 'content' in payload ? payload.content : [];
+      setCandidates(list);
+      setCandTotalElements(Array.isArray(payload) ? list.length : payload.totalElements);
+      setCandTotalPages(Array.isArray(payload) ? 1 : payload.totalPages);
+    } catch (err) {
+      setCandError(getErrorMessage(err));
+      setCandidates([]);
+    } finally {
+      setCandLoading(false);
+    }
+  }, [candRole, candDebounced, candPage]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    fetchPcs();
+  }, [fetchPcs]);
+
+  useEffect(() => {
+    fetchAllPcs();
+  }, [fetchAllPcs]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCandDebounced(candSearch), 300);
+    return () => clearTimeout(timer);
+  }, [candSearch]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [deptFilter, debouncedSearch]);
+
+  useEffect(() => {
+    setCandPage(0);
+  }, [candRole, candDebounced]);
+
+  useEffect(() => {
+    if (assignOpen && assignMode === 'new') fetchCandidates();
+  }, [fetchCandidates, assignOpen, assignMode]);
 
   useEffect(() => {
     departmentApi
@@ -88,9 +174,8 @@ export default function PcManagementPage() {
       .finally(() => setDeptLoading(false));
   }, []);
 
-  const pcs = users.filter((u) => u.role === 'PC');
   const pcCountByDept = new Map<number, number>();
-  for (const u of pcs) {
+  for (const u of allPcs) {
     if (u.departmentId != null) pcCountByDept.set(u.departmentId, (pcCountByDept.get(u.departmentId) ?? 0) + 1);
   }
 
@@ -99,13 +184,11 @@ export default function PcManagementPage() {
     departments.find((d) => d.id === id)?.name ?? null;
 
   const filteredPcs = pcs.filter((u) => {
-    if (deptFilter && u.departmentId !== Number(deptFilter)) return false;
     if (statusFilter === 'active' && !u.active) return false;
     if (statusFilter === 'inactive' && u.active) return false;
     return true;
   });
 
-  const eligibleNewPcs = users.filter((u) => u.role !== 'PO' && u.role !== 'PC');
   const hasActiveFilters = !!search || !!deptFilter || !!statusFilter;
 
   const clearFilters = () => {
@@ -120,7 +203,7 @@ export default function PcManagementPage() {
   const openReassign = (u: User) => {
     setAssignMode('reassign');
     setAssignUser(u);
-    setAssignUserId('');
+    setSelectedCandidate(null);
     setAssignDept(u.departmentId?.toString() ?? '');
     setAssignError(null);
     setAssignOpen(true);
@@ -129,31 +212,31 @@ export default function PcManagementPage() {
   const openAssignNew = () => {
     setAssignMode('new');
     setAssignUser(null);
-    setAssignUserId('');
+    setSelectedCandidate(null);
     setAssignDept('');
     setAssignError(null);
+    setCandSearch('');
+    setCandDebounced('');
+    setCandPage(0);
+    setCandRole('STUDENT');
     setAssignOpen(true);
   };
 
-  const assignOptions =
-    assignMode === 'reassign'
-      ? activeDepts.map((d) => ({
-          label: isDeptFull(d.id, assignUser?.departmentId)
-            ? `${d.name} (${pcCountByDept.get(d.id) ?? 0}/${MAX_PCS_PER_DEPT} — Full)`
-            : d.name,
-          value: d.id,
-        }))
-      : activeDepts.map((d) => ({
-          label: isDeptFull(d.id, null) ? `${d.name} (${pcCountByDept.get(d.id) ?? 0}/${MAX_PCS_PER_DEPT} — Full)` : d.name,
-          value: d.id,
-        }));
+  const assignOptions = activeDepts.map((d) => ({
+    label: isDeptFull(d.id, assignUser?.departmentId)
+      ? `${d.name} (${pcCountByDept.get(d.id) ?? 0}/${MAX_PCS_PER_DEPT} — Full)`
+      : d.name,
+    value: d.id,
+  }));
 
   const handleAssign = async () => {
     const selectedDept = Number(assignDept);
     if (!selectedDept) return;
-    const user =
-      assignMode === 'reassign' ? assignUser : users.find((u) => String(u.id) === assignUserId);
-    if (!user) return;
+    const user = assignMode === 'reassign' ? assignUser : selectedCandidate;
+    if (!user) {
+      setAssignError('Please choose a user first.');
+      return;
+    }
 
     if (isDeptFull(selectedDept, user.departmentId)) {
       setAssignError(
@@ -168,9 +251,10 @@ export default function PcManagementPage() {
       await userApi.assignPc(user.id, selectedDept);
       toast.success(`${user.name} assigned as Coordinator to ${deptName(selectedDept) ?? 'department'}`);
       setAssignOpen(false);
-      setAssignUserId('');
+      setSelectedCandidate(null);
       setAssignDept('');
-      fetchUsers();
+      fetchAllPcs();
+      fetchPcs();
     } catch (err) {
       setAssignError(getErrorMessage(err));
     } finally {
@@ -233,11 +317,11 @@ export default function PcManagementPage() {
         <div className="mb-3 flex items-center gap-2">
           <UserCheck size={16} className="text-primary-600" />
           <span className="text-[15px] font-semibold text-neutral-900">Placement Coordinators</span>
-          <Badge variant="neutral">{filteredPcs.length}</Badge>
+          <Badge variant="neutral">{totalElements}</Badge>
         </div>
 
         {error ? (
-          <ErrorState title="Unable to load coordinators" message={error} onRetry={fetchUsers} />
+          <ErrorState title="Unable to load coordinators" message={error} onRetry={fetchPcs} />
         ) : filteredPcs.length === 0 && !loading ? (
           <div className="bg-white rounded-[14px] border border-neutral-200/60">
             <EmptyState
@@ -251,74 +335,87 @@ export default function PcManagementPage() {
             />
           </div>
         ) : (
-          <DataTable<User>
-            columns={[
-              {
-                key: 'name',
-                label: 'Coordinator',
-                render: (u) => (
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar name={u.name || 'U'} size="sm" />
-                    <div className="min-w-0">
-                      <p className="text-[14.5px] font-medium text-neutral-900 truncate">{u.name}</p>
-                      <p className="text-[12.5px] text-neutral-400 truncate">{u.email || '—'}</p>
+          <>
+            <DataTable<User>
+              columns={[
+                {
+                  key: 'name',
+                  label: 'Coordinator',
+                  render: (u) => (
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar name={u.name || 'U'} size="sm" />
+                      <div className="min-w-0">
+                        <p className="text-[14.5px] font-medium text-neutral-900 truncate">{u.name}</p>
+                        <p className="text-[12.5px] text-neutral-400 truncate">{u.email || '—'}</p>
+                      </div>
                     </div>
-                  </div>
-                ),
-              },
-              {
-                key: 'email',
-                label: 'Email',
-                render: (u) => (
-                  <span className="text-[13.5px] text-neutral-500 whitespace-nowrap">{u.email}</span>
-                ),
-              },
-              {
-                key: 'departmentName',
-                label: 'Department',
-                render: (u) =>
-                  u.departmentName ? (
-                    <Badge variant="neutral">{u.departmentName}</Badge>
-                  ) : (
-                    <span className="text-[14px] text-neutral-400">Unassigned</span>
                   ),
-              },
-              {
-                key: 'active',
-                label: 'Status',
-                render: (u) => (
-                  <Badge variant={u.active ? 'success' : 'neutral'} dot>
-                    {u.active ? 'Active' : 'Inactive'}
-                  </Badge>
-                ),
-              },
-              {
-                key: 'actions',
-                label: '',
-                className: 'w-12',
-                render: (u) => (
-                  <Dropdown
-                    items={[
-                      {
-                        label: 'View',
-                        icon: <Eye size={14} />,
-                        onClick: () => setViewTarget(u),
-                      },
-                      {
-                        label: 'Reassign Department',
-                        icon: <ArrowRightLeft size={14} />,
-                        onClick: () => openReassign(u),
-                      },
-                    ]}
-                  />
-                ),
-              },
-            ]}
-            data={filteredPcs}
-            rowKey={(u) => u.id}
-            loading={loading}
-            density="compact"
-          />
+                },
+                {
+                  key: 'email',
+                  label: 'Email',
+                  render: (u) => (
+                    <span className="text-[13.5px] text-neutral-500 whitespace-nowrap">{u.email}</span>
+                  ),
+                },
+                {
+                  key: 'departmentName',
+                  label: 'Department',
+                  render: (u) =>
+                    u.departmentName ? (
+                      <Badge variant="neutral">{u.departmentName}</Badge>
+                    ) : (
+                      <span className="text-[14px] text-neutral-400">Unassigned</span>
+                    ),
+                },
+                {
+                  key: 'active',
+                  label: 'Status',
+                  render: (u) => (
+                    <Badge variant={u.active ? 'success' : 'neutral'} dot>
+                      {u.active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: 'actions',
+                  label: '',
+                  className: 'w-12',
+                  render: (u) => (
+                    <Dropdown
+                      items={[
+                        {
+                          label: 'View',
+                          icon: <Eye size={14} />,
+                          onClick: () => setViewTarget(u),
+                        },
+                        {
+                          label: 'Reassign Department',
+                          icon: <ArrowRightLeft size={14} />,
+                          onClick: () => openReassign(u),
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ]}
+              data={filteredPcs}
+              rowKey={(u) => u.id}
+              loading={loading}
+              density="compact"
+            />
+            {totalPages > 1 && (
+              <div className="mt-4">
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  totalElements={totalElements}
+                  pageSize={20}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* Assign / reassign modal */}
@@ -328,9 +425,10 @@ export default function PcManagementPage() {
           title={assignMode === 'new' ? 'Assign Coordinator' : 'Reassign Department'}
           description={
             assignMode === 'new'
-              ? 'Select a user and department to make them a Placement Coordinator.'
+              ? 'Search for a user and select a department to make them a Placement Coordinator.'
               : `Choose a new department for ${assignUser?.name || 'this coordinator'}.`
           }
+          size="lg"
           actions={
             <>
               <Button variant="secondary" onClick={() => setAssignOpen(false)} disabled={assigning}>
@@ -344,23 +442,77 @@ export default function PcManagementPage() {
         >
           {assignMode === 'new' && (
             <div className="mb-4">
-              {deptLoading ? (
-                <Skeleton className="h-[44px] w-full" />
-              ) : deptError ? (
-                <p className="text-[14px] text-danger-600">{deptError}</p>
-              ) : (
+              <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                 <Select
-                  label="User"
-                  placeholder="Select a user"
-                  options={eligibleNewPcs.map((u) => ({
-                    label: `${u.name} — ${deptName(u.departmentId) ?? 'No department'} (${u.role === 'PR' ? 'PR' : 'Student'})`,
-                    value: u.id,
-                  }))}
-                  value={assignUserId}
-                  onChange={(e) => setAssignUserId(e.target.value)}
-                  required
+                  label="Candidate roles"
+                  options={CANDIDATE_ROLES}
+                  value={candRole}
+                  onChange={(e) => setCandRole(e.target.value as 'STUDENT' | 'PR')}
+                  className="w-40"
                 />
-              )}
+                <div className="w-56 max-w-full">
+                  <SearchInput
+                    placeholder="Search by name or email..."
+                    value={candSearch}
+                    onChange={(e) => setCandSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="rounded-[12px] border border-neutral-200/60 bg-white overflow-hidden">
+                {candLoading ? (
+                  <div className="p-3 space-y-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Skeleton key={i} className="h-10 w-full" />
+                    ))}
+                  </div>
+                ) : candError ? (
+                  <p className="px-4 py-6 text-center text-[13.5px] text-danger-600">{candError}</p>
+                ) : candidates.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-[13.5px] text-neutral-400">
+                    No candidates match your search.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-neutral-100/70 max-h-[280px] overflow-y-auto">
+                    {candidates.map((u) => {
+                      const selected = selectedCandidate?.id === u.id;
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => setSelectedCandidate(u)}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                            selected ? 'bg-primary-50/60' : 'hover:bg-neutral-50/60'
+                          }`}
+                        >
+                          <Avatar name={u.name || 'U'} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[14px] font-medium text-neutral-900 truncate">{u.name}</p>
+                            <p className="text-[12.5px] text-neutral-400 truncate">{u.email || '—'}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[12px] text-neutral-400">
+                              {deptName(u.departmentId) ?? 'No department'}
+                            </span>
+                            <Badge variant={u.role === 'PR' ? 'teal' : 'neutral'}>{u.role}</Badge>
+                            {selected && <Badge variant="success">Selected</Badge>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {candTotalPages > 1 && (
+                  <div className="border-t border-neutral-100/80 p-2">
+                    <Pagination
+                      page={candPage}
+                      totalPages={candTotalPages}
+                      totalElements={candTotalElements}
+                      pageSize={CANDIDATE_PAGE_SIZE}
+                      onPageChange={setCandPage}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

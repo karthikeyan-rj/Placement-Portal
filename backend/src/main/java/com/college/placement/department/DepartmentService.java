@@ -1,10 +1,13 @@
 package com.college.placement.department;
 
 import com.college.placement.audit.AuditService;
+import com.college.placement.common.enums.Role;
 import com.college.placement.common.exception.BadRequestException;
 import com.college.placement.common.exception.ConflictException;
+import com.college.placement.common.exception.ForbiddenException;
 import com.college.placement.common.exception.ResourceNotFoundException;
 import com.college.placement.department.dto.CreateDepartmentRequest;
+import com.college.placement.department.dto.DepartmentAggregateResponse;
 import com.college.placement.department.dto.DepartmentResponse;
 import com.college.placement.department.dto.UpdateDepartmentRequest;
 import com.college.placement.department.dto.UpdatePrConfigRequest;
@@ -42,6 +45,35 @@ public class DepartmentService {
     public DepartmentResponse getDepartmentById(Long id) {
         Department dept = findDepartment(id);
         return toResponse(dept);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DepartmentAggregateResponse> getAggregates() {
+        List<DepartmentAggregateResponse> all = departmentRepository.findAllAggregates().stream()
+                .map(row -> DepartmentAggregateResponse.builder()
+                        .departmentId(row.getDepartmentId())
+                        .departmentName(row.getDepartmentName())
+                        .active(row.getActive())
+                        .prLimit(row.getPrLimit() != null ? row.getPrLimit() : 5)
+                        .studentCount(row.getStudentCount())
+                        .pcCount(row.getPcCount())
+                        .prCount(row.getPrCount())
+                        .build())
+                .toList();
+
+        Role currentRole = securityUtils.getCurrentUserRole();
+        if (currentRole == Role.PC) {
+            Long deptId = securityUtils.getCurrentUser().getDepartment() != null
+                    ? securityUtils.getCurrentUser().getDepartment().getId() : null;
+            if (deptId == null) {
+                throw new ForbiddenException("You are not assigned to a department.");
+            }
+            return all.stream().filter(a -> deptId.equals(a.getDepartmentId())).toList();
+        }
+        if (currentRole != Role.PO) {
+            throw new ForbiddenException("You do not have permission to view department aggregates.");
+        }
+        return all;
     }
 
     @Transactional

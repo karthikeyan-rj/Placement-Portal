@@ -89,14 +89,23 @@ public interface StudentProfileRepository extends JpaRepository<StudentProfile, 
             " LEFT JOIN student_placement_info spi ON spi.student_profile_id = sp.id " +
             " LEFT JOIN companies spco ON spco.id = spi.placed_company_id ";
 
+    // Canonical student population: active users holding a StudentProfile whose
+    // role is STUDENT or PR (PRs are promoted students sharing the same profile).
+    String PROJECTION_ROLE_GUARD = " u.role IN ('STUDENT','PR') ";
+
     String PROJECTION_WHERE =
-            " WHERE u.active = true AND (:search IS NULL OR sp.register_number ILIKE CONCAT('%', :search, '%') OR u.name ILIKE CONCAT('%', :search, '%')) ";
+            " WHERE u.active = true AND " + PROJECTION_ROLE_GUARD +
+            " AND (:search IS NULL OR sp.register_number ILIKE CONCAT('%', :search, '%') OR u.name ILIKE CONCAT('%', :search, '%') OR u.email ILIKE CONCAT('%', :search, '%')) " +
+            " AND (:role IS NULL OR u.role = :role) " +
+            " AND (:placementInterested IS NULL OR spi.placement_interested = :placementInterested) " +
+            " AND (:placementStatus IS NULL OR spi.placement_status = :placementStatus) ";
 
+    // The LEFT JOIN to student_placement_info mirrors PROJECTION_FROM so filters
+    // on placement columns behave identically in the main and count queries.
+    // spi is 1:1 with student_profiles, so COUNT(*) stays correct.
     String PROJECTION_COUNT_SELECT =
-            " SELECT COUNT(*) FROM student_profiles sp JOIN users u ON u.id = sp.user_id ";
-
-    String PROJECTION_COUNT_WHERE_DEPT = " WHERE u.active = true AND u.department_id = :deptId AND " +
-            " (:search IS NULL OR sp.register_number ILIKE CONCAT('%', :search, '%') OR u.name ILIKE CONCAT('%', :search, '%')) ";
+            " SELECT COUNT(*) FROM student_profiles sp JOIN users u ON u.id = sp.user_id " +
+            " LEFT JOIN student_placement_info spi ON spi.student_profile_id = sp.id ";
 
     String PROJECTION_WHERE_DEPT = PROJECTION_WHERE + " AND u.department_id = :deptId ";
 
@@ -104,7 +113,11 @@ public interface StudentProfileRepository extends JpaRepository<StudentProfile, 
             " ORDER BY sp.register_number",
             countQuery = PROJECTION_COUNT_SELECT + PROJECTION_WHERE,
             nativeQuery = true)
-    Page<StudentListProjection> searchAllProjected(@Param("search") String search, Pageable pageable);
+    Page<StudentListProjection> searchAllProjected(@Param("search") String search,
+                                                   @Param("role") String role,
+                                                   @Param("placementInterested") Boolean placementInterested,
+                                                   @Param("placementStatus") String placementStatus,
+                                                   Pageable pageable);
 
     @Query(value = "SELECT " + PROJECTION_COLUMNS + PROJECTION_FROM + " WHERE u.id = :userId",
             nativeQuery = true)
@@ -112,11 +125,84 @@ public interface StudentProfileRepository extends JpaRepository<StudentProfile, 
 
     @Query(value = "SELECT " + PROJECTION_COLUMNS + PROJECTION_FROM + PROJECTION_WHERE_DEPT +
             " ORDER BY sp.register_number",
-            countQuery = PROJECTION_COUNT_SELECT + PROJECTION_COUNT_WHERE_DEPT,
+            countQuery = PROJECTION_COUNT_SELECT + PROJECTION_WHERE_DEPT,
             nativeQuery = true)
     Page<StudentListProjection> searchByDepartmentProjected(@Param("deptId") Long deptId,
                                                             @Param("search") String search,
+                                                            @Param("role") String role,
+                                                            @Param("placementInterested") Boolean placementInterested,
+                                                            @Param("placementStatus") String placementStatus,
                                                             Pageable pageable);
+
+    // ---- Scale-correct aggregates (F3/F4): canonical population, no full-row downloads ----
+
+    @Query(value = "SELECT COUNT(*) FROM student_profiles sp JOIN users u ON u.id = sp.user_id " +
+            " WHERE u.active = true AND u.role IN ('STUDENT','PR') " +
+            " AND (:deptId IS NULL OR u.department_id = :deptId)",
+            nativeQuery = true)
+    long countActivePopulation(@Param("deptId") Long deptId);
+
+    @Query(value = "SELECT COUNT(*) FROM student_profiles sp JOIN users u ON u.id = sp.user_id " +
+            " LEFT JOIN student_placement_info spi ON spi.student_profile_id = sp.id " +
+            " WHERE u.active = true AND u.role IN ('STUDENT','PR') " +
+            " AND spi.placement_interested = true " +
+            " AND (:deptId IS NULL OR u.department_id = :deptId)",
+            nativeQuery = true)
+    long countPlacementInterested(@Param("deptId") Long deptId);
+
+    @Query(value = "SELECT spi.placement_status AS status, COUNT(*) AS count FROM student_profiles sp " +
+            " JOIN users u ON u.id = sp.user_id " +
+            " LEFT JOIN student_placement_info spi ON spi.student_profile_id = sp.id " +
+            " WHERE u.active = true AND u.role IN ('STUDENT','PR') " +
+            " AND (:deptId IS NULL OR u.department_id = :deptId) " +
+            " GROUP BY spi.placement_status",
+            nativeQuery = true)
+    List<StatusCountProjection> countByPlacementStatus(@Param("deptId") Long deptId);
+
+    @Query(value = "SELECT u.department_id AS departmentId, d.name AS departmentName, " +
+            " COUNT(*) AS studentCount, " +
+            " COUNT(*) FILTER (WHERE spi.placement_interested = true) AS interestedCount, " +
+            " COUNT(*) FILTER (WHERE spi.placement_status = 'PLACED') AS placedCount " +
+            " FROM student_profiles sp JOIN users u ON u.id = sp.user_id " +
+            " LEFT JOIN departments d ON d.id = u.department_id " +
+            " LEFT JOIN student_placement_info spi ON spi.student_profile_id = sp.id " +
+            " WHERE u.active = true AND u.role IN ('STUDENT','PR') " +
+            " AND (:deptId IS NULL OR u.department_id = :deptId) " +
+            " GROUP BY u.department_id, d.name ORDER BY d.name",
+            nativeQuery = true)
+    List<DepartmentAggregateProjection> summarizeByDepartment(@Param("deptId") Long deptId);
+
+    @Query(value = "SELECT sp.batch AS batch, " +
+            " COUNT(*) AS studentCount, " +
+            " COUNT(*) FILTER (WHERE spi.placement_interested = true) AS interestedCount, " +
+            " COUNT(*) FILTER (WHERE spi.placement_status = 'PLACED') AS placedCount " +
+            " FROM student_profiles sp JOIN users u ON u.id = sp.user_id " +
+            " LEFT JOIN student_placement_info spi ON spi.student_profile_id = sp.id " +
+            " WHERE u.active = true AND u.role IN ('STUDENT','PR') " +
+            " AND (:deptId IS NULL OR u.department_id = :deptId) " +
+            " GROUP BY sp.batch ORDER BY sp.batch",
+            nativeQuery = true)
+    List<BatchAggregateProjection> summarizeByBatch(@Param("deptId") Long deptId);
+
+    interface StatusCountProjection {
+        String getStatus();
+        long getCount();
+    }
+
+    interface DepartmentAggregateProjection {
+        Long getDepartmentId();
+        String getDepartmentName();
+        long getStudentCount();
+        long getInterestedCount();
+        long getPlacedCount();
+    }
+
+    interface BatchAggregateProjection {
+        String getBatch();
+        long getStudentCount();
+        long getInterestedCount();
+        long getPlacedCount();
+    }
 
     interface StudentListProjection {
         Long getId();

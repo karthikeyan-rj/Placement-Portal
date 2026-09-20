@@ -30,10 +30,12 @@ public class UserController {
     @GetMapping
     public ResponseEntity<ApiResponse<PaginatedResponse<UserResponse>>> searchUsers(
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) Role role,
+            @RequestParam(required = false) Long departmentId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<UserResponse> result = userService.searchUsers(
-                search, PageRequest.of(page, size, Sort.by("name").ascending()));
+                search, role, departmentId, PageRequest.of(page, size, Sort.by("name").ascending()));
 
         PaginatedResponse<UserResponse> paginated = PaginatedResponse.<UserResponse>builder()
                 .content(result.getContent())
@@ -84,12 +86,6 @@ public class UserController {
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<Map<String, Long>>> getStats() {
         securityUtils.requireRole(Role.PO);
-        Map<String, Long> stats = Map.of(
-                "totalStudents", userService.countByRole(Role.STUDENT),
-                "totalPCs", userService.countByRole(Role.PC),
-                "totalPRs", userService.countByRole(Role.PR),
-                "totalPOs", userService.countByRole(Role.PO)
-        );
-        return ResponseEntity.ok(ApiResponse.success(stats));
+        return ResponseEntity.ok(ApiResponse.success(userService.getStats()));
     }
 }

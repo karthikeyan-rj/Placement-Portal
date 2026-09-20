@@ -33,19 +33,22 @@ public class StudentService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public Page<?> searchStudents(String search, Long departmentId, Pageable pageable) {
+    public Page<?> searchStudents(String search, Long departmentId, String role,
+                                  Boolean placementInterested, String placementStatus, Pageable pageable) {
         User currentUser = securityUtils.getCurrentUser();
-        Role role = currentUser.getRole();
+        Role currentRole = currentUser.getRole();
 
         Page<StudentProfileRepository.StudentListProjection> rows;
-        if (role == Role.PO) {
+        if (currentRole == Role.PO) {
             if (departmentId != null) {
-                rows = profileRepository.searchByDepartmentProjected(departmentId, search, pageable);
+                rows = profileRepository.searchByDepartmentProjected(departmentId, search, role,
+                        placementInterested, placementStatus, pageable);
             } else {
-                rows = profileRepository.searchAllProjected(search, pageable);
+                rows = profileRepository.searchAllProjected(search, role,
+                        placementInterested, placementStatus, pageable);
             }
             return rows.map(this::toResponseFromProjection);
-        } else if (role == Role.PC || role == Role.PR) {
+        } else if (currentRole == Role.PC || currentRole == Role.PR) {
             Long userDeptId = currentUser.getDepartment() != null ? currentUser.getDepartment().getId() : null;
             if (userDeptId == null) {
                 throw new ForbiddenException("You are not assigned to a department.");
@@ -53,8 +56,9 @@ public class StudentService {
             if (departmentId != null && !departmentId.equals(userDeptId)) {
                 throw new ForbiddenException("You can only access students within your department.");
             }
-            rows = profileRepository.searchByDepartmentProjected(userDeptId, search, pageable);
-            if (role == Role.PR) {
+            rows = profileRepository.searchByDepartmentProjected(userDeptId, search, role,
+                    placementInterested, placementStatus, pageable);
+            if (currentRole == Role.PR) {
                 return rows.map(this::toSummaryFromProjection);
             }
             return rows.map(this::toResponseFromProjection);

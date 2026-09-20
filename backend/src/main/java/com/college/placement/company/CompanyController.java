@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/companies")
 @RequiredArgsConstructor
@@ -40,6 +42,11 @@ public class CompanyController {
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success(paginated));
+    }
+
+    @GetMapping("/options")
+    public ResponseEntity<ApiResponse<List<CompanyService.CompanyOptionResponse>>> getOptions() {
+        return ResponseEntity.ok(ApiResponse.success(companyService.getOptions()));
     }
 
     @GetMapping("/{id}")

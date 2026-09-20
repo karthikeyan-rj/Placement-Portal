@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { departmentApi, userApi, studentApi } from '../../api/api';
-import type { Department, User, StudentProfile } from '../../types';
+import { departmentApi } from '../../api/api';
+import type { Department, DepartmentAggregate } from '../../types';
 import { Skeleton, PageHeader, PageContainer, ErrorState, EmptyState } from '../../components/ui';
 import { getErrorMessage } from '../../api/axios';
 import { Building2, Users, Shield, GraduationCap, ArrowRight } from 'lucide-react';
@@ -18,8 +18,7 @@ const DEPT_FULL_NAMES: Record<string, string> = {
 export default function DepartmentsPage() {
   const navigate = useNavigate();
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [students, setStudents] = useState<StudentProfile[]>([]);
+  const [aggregates, setAggregates] = useState<Record<number, DepartmentAggregate>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -28,28 +27,13 @@ export default function DepartmentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [deptRes, userRes, studentRes] = await Promise.all([
+      const [deptRes, aggregateRes] = await Promise.all([
         departmentApi.getAll(),
-        userApi.getAll({ size: 1000 }),
-        studentApi.getAll({ size: 1000 }),
+        departmentApi.aggregates(),
       ]);
       setDepartments(deptRes.data.data || []);
-
-      const userPayload = userRes.data.data;
-      const userList = Array.isArray(userPayload)
-        ? userPayload
-        : userPayload && typeof userPayload === 'object' && 'content' in userPayload
-        ? (userPayload.content as User[])
-        : [];
-      setUsers(userList);
-
-      const studentPayload = studentRes.data.data;
-      const studentList = Array.isArray(studentPayload)
-        ? studentPayload
-        : studentPayload && typeof studentPayload === 'object' && 'content' in studentPayload
-        ? (studentPayload.content as StudentProfile[])
-        : [];
-      setStudents(studentList);
+      const aggList = aggregateRes.data.data || [];
+      setAggregates(Object.fromEntries(aggList.map((a) => [a.departmentId, a])));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -62,10 +46,12 @@ export default function DepartmentsPage() {
   }, [fetchData, reloadKey]);
 
   const getDeptStats = (deptId: number) => {
-    const pcCount = users.filter((u) => u.role === 'PC' && u.departmentId === deptId).length;
-    const prCount = users.filter((u) => u.role === 'PR' && u.departmentId === deptId).length;
-    const studentCount = students.filter((s) => s.departmentId === deptId).length;
-    return { pcCount, prCount, studentCount };
+    const agg = aggregates[deptId];
+    return {
+      pcCount: agg?.pcCount ?? 0,
+      prCount: agg?.prCount ?? 0,
+      studentCount: agg?.studentCount ?? 0,
+    };
   };
 
   return (

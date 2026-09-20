@@ -7,6 +7,7 @@ import {
   Badge,
   Modal,
   DataTable,
+  Pagination,
   SearchInput,
   PageHeader,
   PageContainer,
@@ -27,15 +28,30 @@ type PrRow = User & { registerNumber: string | null };
 
 export default function PrManagementPage() {
   const [deptFilter, setDeptFilter] = useState('');
-  const [studentSearch, setStudentSearch] = useState('');
 
-  const [users, setUsers] = useState<User[]>([]);
-  const [usersLoading, setUsersLoading] = useState(true);
-  const [usersError, setUsersError] = useState<string | null>(null);
+  // Current representatives (server paginated)
+  const [prSearch, setPrSearch] = useState('');
+  const [prDebounced, setPrDebounced] = useState('');
+  const [prPage, setPrPage] = useState(0);
+  const [prs, setPrs] = useState<User[]>([]);
+  const [prLoading, setPrLoading] = useState(true);
+  const [prError, setPrError] = useState<string | null>(null);
+  const [prTotalElements, setPrTotalElements] = useState(0);
+  const [prTotalPages, setPrTotalPages] = useState(0);
 
-  const [profiles, setProfiles] = useState<StudentProfile[]>([]);
-  const [profilesLoading, setProfilesLoading] = useState(true);
-  const [profilesError, setProfilesError] = useState<string | null>(null);
+  // Available students (server paginated, STUDENT role only)
+  const [availSearch, setAvailSearch] = useState('');
+  const [availDebounced, setAvailDebounced] = useState('');
+  const [availPage, setAvailPage] = useState(0);
+  const [available, setAvailable] = useState<StudentProfile[]>([]);
+  const [availLoading, setAvailLoading] = useState(true);
+  const [availError, setAvailError] = useState<string | null>(null);
+  const [availTotalElements, setAvailTotalElements] = useState(0);
+  const [availTotalPages, setAvailTotalPages] = useState(0);
+
+  // Authoritative PR snapshot (all departments) drives capacity + "full" checks.
+  const [allPrs, setAllPrs] = useState<User[]>([]);
+  const [regNumbers, setRegNumbers] = useState<Map<number, string>>(new Map());
 
   const [departments, setDepartments] = useState<Department[]>([]);
 
@@ -45,102 +61,141 @@ export default function PrManagementPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const fetchUsers = useCallback(async () => {
-    setUsersLoading(true);
-    setUsersError(null);
+  const fetchPrs = useCallback(async () => {
+    setPrLoading(true);
+    setPrError(null);
     try {
-      const res = await userApi.getAll({ size: 1000 });
+      const res = await userApi.getAll({
+        role: 'PR',
+        departmentId: deptFilter && Number(deptFilter) ? Number(deptFilter) : undefined,
+        search: prDebounced || undefined,
+        page: prPage,
+        size: 50,
+      });
       const payload = res.data.data;
-      setUsers(Array.isArray(payload) ? payload : 'content' in payload ? payload.content : []);
+      setPrs(Array.isArray(payload) ? payload : 'content' in payload ? payload.content : []);
+      setPrTotalElements(Array.isArray(payload) ? payload.length : payload.totalElements);
+      setPrTotalPages(Array.isArray(payload) ? 1 : payload.totalPages);
     } catch (err) {
-      setUsersError(getErrorMessage(err));
-      setUsers([]);
+      setPrError(getErrorMessage(err));
+      setPrs([]);
     } finally {
-      setUsersLoading(false);
+      setPrLoading(false);
+    }
+  }, [deptFilter, prDebounced, prPage]);
+
+  const fetchAvailable = useCallback(async () => {
+    setAvailLoading(true);
+    setAvailError(null);
+    try {
+      const res = await studentApi.getAll({
+        role: 'STUDENT',
+        departmentId: deptFilter && Number(deptFilter) ? Number(deptFilter) : undefined,
+        search: availDebounced || undefined,
+        page: availPage,
+        size: 20,
+      });
+      const payload = res.data.data;
+      setAvailable(Array.isArray(payload) ? payload : 'content' in payload ? payload.content : []);
+      setAvailTotalElements(Array.isArray(payload) ? payload.length : payload.totalElements);
+      setAvailTotalPages(Array.isArray(payload) ? 1 : payload.totalPages);
+    } catch (err) {
+      setAvailError(getErrorMessage(err));
+      setAvailable([]);
+    } finally {
+      setAvailLoading(false);
+    }
+  }, [deptFilter, availDebounced, availPage]);
+
+  const fetchAllPrs = useCallback(async () => {
+    try {
+      const res = await userApi.getAll({ role: 'PR', page: 0, size: 200 });
+      const payload = res.data.data;
+      setAllPrs(Array.isArray(payload) ? payload : 'content' in payload ? payload.content : []);
+    } catch {
+      setAllPrs([]);
     }
   }, []);
 
-  const fetchProfiles = useCallback(async () => {
-    setProfilesLoading(true);
-    setProfilesError(null);
+  const fetchRegNumbers = useCallback(async () => {
     try {
-      const res = await studentApi.getAll({ size: 1000 });
+      const res = await studentApi.getAll({ role: 'PR', page: 0, size: 300 });
       const payload = res.data.data;
-      setProfiles(Array.isArray(payload) ? payload : 'content' in payload ? payload.content : []);
-    } catch (err) {
-      setProfilesError(getErrorMessage(err));
-      setProfiles([]);
-    } finally {
-      setProfilesLoading(false);
+      const list = Array.isArray(payload) ? payload : 'content' in payload ? payload.content : [];
+      const map = new Map<number, string>();
+      for (const s of list) map.set(s.userId, s.registerNumber);
+      setRegNumbers(map);
+    } catch {
+      setRegNumbers(new Map());
     }
   }, []);
 
   const reload = useCallback(() => {
-    fetchUsers();
-    fetchProfiles();
-  }, [fetchUsers, fetchProfiles]);
+    fetchPrs();
+    fetchAvailable();
+    fetchAllPrs();
+    fetchRegNumbers();
+  }, [fetchPrs, fetchAvailable, fetchAllPrs, fetchRegNumbers]);
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    fetchPrs();
+  }, [fetchPrs]);
+
+  useEffect(() => {
+    fetchAvailable();
+  }, [fetchAvailable]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setPrDebounced(prSearch), 300);
+    return () => clearTimeout(timer);
+  }, [prSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAvailDebounced(availSearch), 300);
+    return () => clearTimeout(timer);
+  }, [availSearch]);
+
+  useEffect(() => {
+    setPrPage(0);
+  }, [deptFilter, prDebounced]);
+
+  useEffect(() => {
+    setAvailPage(0);
+  }, [deptFilter, availDebounced]);
+
+  useEffect(() => {
+    fetchAllPrs();
+    fetchRegNumbers();
+  }, [fetchAllPrs, fetchRegNumbers]);
 
   useEffect(() => {
     departmentApi.getAll().then((res) => setDepartments(res.data.data)).catch(() => {});
   }, []);
 
-  const loading = usersLoading || profilesLoading;
-  const error = usersError || profilesError;
   const activeDepts = departments.filter((d) => d.active);
   const deptName = (id: number | null | undefined) =>
     departments.find((d) => d.id === id)?.name ?? null;
 
-  const prs = users.filter((u) => u.role === 'PR');
-  const studentUserIds = new Set(users.filter((u) => u.role === 'STUDENT').map((u) => u.id));
-
-  const firstNameByUser = new Map<number, string>();
-  for (const p of profiles) firstNameByUser.set(p.userId, p.userName || '');
-  const registerNumberByUser = new Map<number, string | null>();
-  for (const p of profiles) registerNumberByUser.set(p.userId, p.registerNumber || null);
-  const cgpaByUser = new Map<number, number | null>();
-  for (const p of profiles) cgpaByUser.set(p.userId, p.cgpa ?? null);
-
   const prRows: PrRow[] = prs.map((u) => ({
     ...u,
-    registerNumber: registerNumberByUser.get(u.id) ?? null,
+    registerNumber: regNumbers.get(u.id) ?? null,
   }));
 
   const prLimitFor = (deptId: number | null | undefined) =>
     departments.find((d) => d.id === deptId)?.prLimit ?? DEFAULT_PR_LIMIT;
 
   const prCountByDept = new Map<number, number>();
-  for (const p of prs) {
+  for (const p of allPrs) {
     if (p.departmentId != null) prCountByDept.set(p.departmentId, (prCountByDept.get(p.departmentId) ?? 0) + 1);
   }
 
-  const filteredPrs =
-    deptFilter && Number(deptFilter)
-      ? prRows.filter((p) => p.departmentId === Number(deptFilter))
-      : prRows;
-
-  // Available students = student profiles whose user account is still a STUDENT
-  const available = profiles.filter((p) => studentUserIds.has(p.userId));
-  const filteredAvailable = available.filter((p) => {
-    if (deptFilter && Number(deptFilter) && p.departmentId !== Number(deptFilter)) return false;
-    const term = studentSearch.trim().toLowerCase();
-    if (term) {
-      const hay = `${p.userName} ${p.userEmail} ${p.registerNumber}`.toLowerCase();
-      if (!hay.includes(term)) return false;
-    }
-    return true;
-  });
-
-  const hasStudentFilters = !!deptFilter || !!studentSearch;
+  const hasStudentFilters = !!deptFilter || !!availSearch;
 
   // Capacity for the selected filter
   const capTargetDept = deptFilter && Number(deptFilter) ? Number(deptFilter) : null;
   const capUsed = capTargetDept
     ? prCountByDept.get(capTargetDept) ?? 0
-    : prs.length;
+    : allPrs.length;
   const capMax = capTargetDept
     ? prLimitFor(capTargetDept)
     : activeDepts.reduce((sum, d) => sum + (d.prLimit ?? DEFAULT_PR_LIMIT), 0);
@@ -190,7 +245,8 @@ export default function PrManagementPage() {
 
   const clearFilters = () => {
     setDeptFilter('');
-    setStudentSearch('');
+    setPrSearch('');
+    setAvailSearch('');
   };
 
   return (
@@ -260,17 +316,17 @@ export default function PrManagementPage() {
           </div>
         )}
 
-        {error ? (
-          <ErrorState title="Unable to load representatives" message={error} onRetry={reload} />
+        {prError ? (
+          <ErrorState title="Unable to load representatives" message={prError} onRetry={fetchPrs} />
         ) : (
           <>
             {/* Current representatives */}
             <div className="mb-3 flex items-center gap-2">
               <Shield size={16} className="text-primary-600" />
               <span className="text-[15px] font-semibold text-neutral-900">Current Representatives</span>
-              <Badge variant="neutral">{filteredPrs.length}</Badge>
+              <Badge variant="neutral">{prTotalElements}</Badge>
             </div>
-            {filteredPrs.length === 0 && !loading ? (
+            {prRows.length === 0 && !prLoading ? (
               <div className="bg-white rounded-[14px] border border-neutral-200/60">
                 <EmptyState
                   icon={<Shield size={22} />}
@@ -288,9 +344,7 @@ export default function PrManagementPage() {
                       <div className="flex items-center gap-3 min-w-0">
                         <Avatar name={u.name || 'U'} size="sm" />
                         <div className="min-w-0">
-                          <p className="text-[14.5px] font-medium text-neutral-900 truncate">
-                            {firstNameByUser.get(u.id) || u.name}
-                          </p>
+                          <p className="text-[14.5px] font-medium text-neutral-900 truncate">{u.name}</p>
                           <p className="text-[12.5px] text-neutral-400 truncate">{u.email || '—'}</p>
                         </div>
                       </div>
@@ -347,29 +401,40 @@ export default function PrManagementPage() {
                     ),
                   },
                 ]}
-                data={filteredPrs}
+                data={prRows}
                 rowKey={(u) => u.id}
-                loading={loading}
+                loading={prLoading}
                 density="compact"
               />
+            )}
+            {prTotalPages > 1 && (
+              <div className="mt-4">
+                <Pagination
+                  page={prPage}
+                  totalPages={prTotalPages}
+                  totalElements={prTotalElements}
+                  pageSize={50}
+                  onPageChange={setPrPage}
+                />
+              </div>
             )}
 
             {/* Available students */}
             <div className="mt-8 mb-3 flex items-center gap-2 flex-wrap">
               <UserCheck size={16} className="text-primary-600" />
               <span className="text-[15px] font-semibold text-neutral-900">Available Students</span>
-              <Badge variant="neutral">{filteredAvailable.length}</Badge>
+              <Badge variant="neutral">{availTotalElements}</Badge>
               <div className="ml-auto w-64 max-w-full">
                 <SearchInput
                   placeholder="Search students..."
-                  value={studentSearch}
-                  onChange={(e) => setStudentSearch(e.target.value)}
+                  value={availSearch}
+                  onChange={(e) => setAvailSearch(e.target.value)}
                 />
               </div>
             </div>
-            {profilesError ? (
-              <ErrorState title="Unable to load students" message={profilesError} onRetry={fetchProfiles} />
-            ) : filteredAvailable.length === 0 && !profilesLoading ? (
+            {availError ? (
+              <ErrorState title="Unable to load students" message={availError} onRetry={fetchAvailable} />
+            ) : available.length === 0 && !availLoading ? (
               <div className="bg-white rounded-[14px] border border-neutral-200/60">
                 <EmptyState
                   icon={<UserCheck size={22} />}
@@ -421,7 +486,7 @@ export default function PrManagementPage() {
                     label: 'CGPA',
                     render: (s) => (
                       <span className="text-[14px] font-semibold text-neutral-800 tabular-nums">
-                        {cgpaByUser.get(s.userId)?.toFixed(2) ?? '—'}
+                        {s.cgpa?.toFixed(2) ?? '—'}
                       </span>
                     ),
                   },
@@ -440,8 +505,15 @@ export default function PrManagementPage() {
                             title={full ? `PR capacity reached for ${deptName(s.departmentId) ?? 'this department'}` : 'Promote this student to Placement Representative'}
                             onClick={(e) => {
                               e.stopPropagation();
-                              const u = users.find((x) => x.id === s.userId);
-                              if (u) setPromoteTarget(u);
+                              setPromoteTarget({
+                                id: s.userId,
+                                name: s.userName || '',
+                                email: s.userEmail,
+                                role: 'STUDENT',
+                                departmentId: s.departmentId,
+                                departmentName: s.departmentName,
+                                active: true,
+                              });
                             }}
                           >
                             <UserPlus size={14} />
@@ -457,11 +529,22 @@ export default function PrManagementPage() {
                     },
                   },
                 ]}
-                data={filteredAvailable}
+                data={available}
                 rowKey={(s) => s.id}
-                loading={profilesLoading}
+                loading={availLoading}
                 density="compact"
               />
+            )}
+            {availTotalPages > 1 && (
+              <div className="mt-4">
+                <Pagination
+                  page={availPage}
+                  totalPages={availTotalPages}
+                  totalElements={availTotalElements}
+                  pageSize={20}
+                  onPageChange={setAvailPage}
+                />
+              </div>
             )}
           </>
         )}

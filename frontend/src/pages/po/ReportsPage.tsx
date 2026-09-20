@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
-import { reportApi, departmentApi, studentApi, companyApi, placementDriveApi } from '../../api/api';
-import type { Department, StudentProfile, PlacementDrive, Company } from '../../types';
+import { reportApi, departmentApi } from '../../api/api';
+import type { Department, ReportSummary } from '../../types';
 import { getErrorMessage } from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -28,8 +28,6 @@ import {
   FileDown,
   FileSpreadsheet,
 } from 'lucide-react';
-
-const DONE_DRIVE_STATUSES = ['COMPLETED', 'CANCELLED'];
 
 interface DepartmentStat {
   id: number;
@@ -76,30 +74,12 @@ function fileDateStamp(): string {
   return `${String(d.getDate()).padStart(2, '0')}-${MONTHS[d.getMonth()]}-${d.getFullYear()}`;
 }
 
-async function fetchAllStudents(): Promise<StudentProfile[]> {
-  const all: StudentProfile[] = [];
-  const size = 500;
-  let page = 0;
-  for (let guard = 0; guard < 50; guard += 1) {
-    const res = await studentApi.search({ page, size });
-    const data = res.data?.data;
-    const content: StudentProfile[] = data?.content ?? [];
-    all.push(...content);
-    const totalElements = data?.totalElements ?? all.length;
-    if (content.length === 0 || all.length >= totalElements) break;
-    page += 1;
-  }
-  return all;
-}
-
 export default function ReportsPage() {
   const { user } = useAuth();
   const isPo = user?.role === 'PO';
 
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [students, setStudents] = useState<StudentProfile[]>([]);
-  const [drives, setDrives] = useState<PlacementDrive[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -109,19 +89,16 @@ export default function ReportsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
-        const [deptRes, studentList, driveRes, companyRes] = await Promise.all([
+        const [deptRes, summaryRes] = await Promise.all([
           departmentApi.getAll(),
-          fetchAllStudents(),
-          placementDriveApi.getAll({ size: 500 }),
-          companyApi.getAll({ size: 500 }),
+          reportApi.summary(deptFilter === '' ? undefined : Number(deptFilter)),
         ]);
         if (cancelled) return;
         setDepartments(deptRes.data?.data ?? []);
-        setStudents(studentList);
-        setDrives(driveRes.data?.data?.content ?? []);
-        setCompanies(companyRes.data?.data?.content ?? []);
+        setSummary(summaryRes.data?.data ?? null);
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err));
       } finally {
@@ -131,7 +108,7 @@ export default function ReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [retryKey]);
+  }, [deptFilter, retryKey]);
 
   const handleRetry = () => {
     setError(null);
@@ -140,63 +117,30 @@ export default function ReportsPage() {
   };
 
   const stats = useMemo(() => {
-    const studentsInScope =
-      deptFilter === '' ? students : students.filter((s) => String(s.departmentId) === deptFilter);
+    const s = summary;
+    const totalStudents = s?.totalStudentPopulation ?? 0;
+    const placed = s?.placed ?? 0;
+    const interested = s?.placementInterested ?? 0;
+    const notPlaced = s?.notPlaced ?? 0;
+    const blocked = s?.blocked ?? 0;
+    const rate = s?.placementRate ?? 0;
 
-    const placed = studentsInScope.filter((s) => s.placementStatus === 'PLACED').length;
-    const interested = studentsInScope.filter((s) => s.placementInterested).length;
-    const rate = studentsInScope.length ? Math.round((placed / studentsInScope.length) * 1000) / 10 : 0;
+    const byDept: DepartmentStat[] = (s?.byDepartment ?? []).map((d) => ({
+      id: d.departmentId ?? -1,
+      name: d.departmentName,
+      students: d.studentCount,
+      interested: d.interestedCount,
+      placed: d.placedCount,
+      rate: d.placementRate,
+    }));
 
-    const notPlaced = studentsInScope.filter(
-      (s) => s.placementStatus !== 'PLACED' && s.placementStatus !== 'BLOCKED'
-    ).length;
-    const blocked = studentsInScope.filter((s) => s.placementStatus === 'BLOCKED').length;
-
-    const activeDrives = drives.filter((d) => !DONE_DRIVE_STATUSES.includes(d.status)).length;
-    const completedDrives = drives.filter((d) => d.status === 'COMPLETED').length;
-    const activeCompanies = companies.filter((c) => c.active).length;
-
-    const deptMap = new Map<number, DepartmentStat>();
-    for (const s of studentsInScope) {
-      const d = deptMap.get(s.departmentId) ?? {
-        id: s.departmentId,
-        name: s.departmentName || `Department #${s.departmentId}`,
-        students: 0,
-        interested: 0,
-        placed: 0,
-        rate: 0,
-      };
-      d.students += 1;
-      if (s.placementInterested) d.interested += 1;
-      if (s.placementStatus === 'PLACED') d.placed += 1;
-      deptMap.set(s.departmentId, d);
-    }
-    const byDept = Array.from(deptMap.values())
-      .map((d) => ({
-        ...d,
-        rate: d.students ? Math.round((d.placed / d.students) * 1000) / 10 : 0,
-      }))
-      .sort((a, b) => b.placed - a.placed || b.students - a.students);
-
-    const batchMap = new Map<string, BatchStat>();
-    for (const s of studentsInScope) {
-      const key = s.batch?.trim() || 'Not specified';
-      const b = batchMap.get(key) ?? { batch: key, students: 0, interested: 0, placed: 0, rate: 0 };
-      b.students += 1;
-      if (s.placementInterested) b.interested += 1;
-      if (s.placementStatus === 'PLACED') b.placed += 1;
-      batchMap.set(key, b);
-    }
-    const byBatch = Array.from(batchMap.values())
-      .map((b) => ({
-        ...b,
-        rate: b.students ? Math.round((b.placed / b.students) * 1000) / 10 : 0,
-      }))
-      .sort((a, b) => {
-        if (a.batch === 'Not specified') return 1;
-        if (b.batch === 'Not specified') return -1;
-        return b.students - a.students;
-      });
+    const byBatch: BatchStat[] = (s?.byBatch ?? []).map((b) => ({
+      batch: b.batch,
+      students: b.studentCount,
+      interested: b.interestedCount,
+      placed: b.placedCount,
+      rate: b.placementRate,
+    }));
 
     const statusSegments: StatusSegment[] = [
       { key: 'PLACED', label: 'Placed', color: '#059669', count: placed },
@@ -205,28 +149,28 @@ export default function ReportsPage() {
     ].filter((seg) => seg.count > 0);
 
     return {
-      studentsInScope,
-      totalStudents: studentsInScope.length,
+      totalStudents,
       placed,
       interested,
       rate,
       blocked,
       statusSegments,
-      activeDrives,
-      completedDrives,
-      activeCompanies,
+      activeDrives: s?.activeDrives ?? 0,
+      completedDrives: s?.completedDrives ?? 0,
+      activeCompanies: s?.activeCompanies ?? 0,
       byDept,
       byBatch,
     };
-  }, [students, drives, companies, deptFilter]);
+  }, [summary]);
 
   const deptOptions = useMemo(() => {
-    const presentDeptIds = new Set(students.map((s) => s.departmentId));
-    return (isPo ? departments : departments.filter((d) => presentDeptIds.has(d.id))).map((d) => ({
-      label: d.name,
-      value: String(d.id),
-    }));
-  }, [departments, students, isPo]);
+    return departments
+      .filter((d) => d.active || String(d.id) === deptFilter)
+      .map((d) => ({
+        label: d.name,
+        value: String(d.id),
+      }));
+  }, [departments, deptFilter]);
 
   const selectedDeptName = useMemo(
     () => departments.find((d) => String(d.id) === deptFilter)?.name,

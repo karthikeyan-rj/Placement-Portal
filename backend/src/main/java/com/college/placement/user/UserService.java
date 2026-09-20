@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -34,14 +35,19 @@ public class UserService {
     private final SecurityUtils securityUtils;
 
     @Transactional(readOnly = true)
-    public Page<UserResponse> searchUsers(String search, Pageable pageable) {
-        Role role = securityUtils.getCurrentUserRole();
+    public Page<UserResponse> searchUsers(String search, Role role, Long departmentId, Pageable pageable) {
+        Role currentRole = securityUtils.getCurrentUserRole();
 
-        if (role == Role.PO) {
-            return userRepository.searchUsers(search, pageable).map(this::toResponse);
-        } else if (role == Role.PC) {
+        if (currentRole == Role.PO) {
+            return userRepository.searchUsersScoped(departmentId, role != null ? role.name() : null,
+                    search, pageable).map(this::toResponse);
+        } else if (currentRole == Role.PC) {
             Long deptId = securityUtils.getCurrentUser().getDepartment().getId();
-            return userRepository.searchUsersByDepartment(deptId, search, pageable).map(this::toResponse);
+            if (departmentId != null && !departmentId.equals(deptId)) {
+                throw new ForbiddenException("You can only search users within your department.");
+            }
+            return userRepository.searchUsersScoped(deptId, role != null ? role.name() : null,
+                    search, pageable).map(this::toResponse);
         }
 
         throw new ForbiddenException("You do not have permission to search users.");
@@ -106,7 +112,9 @@ public class UserService {
         }
 
         long pcCount = userRepository.countByRoleAndDepartment(Role.PC, departmentId);
-        if (pcCount >= 2) {
+        Long userDeptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+        boolean noOpReassign = user.getRole() == Role.PC && departmentId.equals(userDeptId);
+        if (pcCount >= 2 && !noOpReassign) {
             throw new BadRequestException("Maximum 2 PCs allowed per department.");
         }
 
@@ -211,15 +219,22 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public long countByRoleAndDepartment(Role role, Long departmentId) {
-        return userRepository.countByRoleAndDepartment(role, departmentId);
-    }
-
-    @Transactional(readOnly = true)
     public List<UserResponse> getUsersByRoleAndDepartment(Role role, Long departmentId) {
         return userRepository.findByRoleAndDepartmentId(role, departmentId).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    // Canonical stats (F2): totalStudents = active users with a StudentProfile whose
+    // role is STUDENT or PR (PRs are promoted students, not separate people).
+    @Transactional(readOnly = true)
+    public Map<String, Long> getStats() {
+        return Map.of(
+                "totalStudents", userRepository.countActiveStudentPopulation(),
+                "totalPcs", userRepository.countByRole(Role.PC),
+                "totalPrs", userRepository.countByRole(Role.PR),
+                "totalPOs", userRepository.countByRole(Role.PO)
+        );
     }
 
     private void validateAccess(User targetUser) {

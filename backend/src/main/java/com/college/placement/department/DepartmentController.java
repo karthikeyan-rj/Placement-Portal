@@ -2,6 +2,7 @@ package com.college.placement.department;
 
 import com.college.placement.common.dto.ApiResponse;
 import com.college.placement.department.dto.CreateDepartmentRequest;
+import com.college.placement.department.dto.DepartmentAggregateResponse;
 import com.college.placement.department.dto.DepartmentResponse;
 import com.college.placement.department.dto.UpdateDepartmentRequest;
 import com.college.placement.department.dto.UpdatePrConfigRequest;
@@ -28,6 +29,11 @@ public class DepartmentController {
     @GetMapping("/active")
     public ResponseEntity<ApiResponse<List<DepartmentResponse>>> getActiveDepartments() {
         return ResponseEntity.ok(ApiResponse.success(departmentService.getActiveDepartments()));
+    }
+
+    @GetMapping("/aggregates")
+    public ResponseEntity<ApiResponse<List<DepartmentAggregateResponse>>> getAggregates() {
+        return ResponseEntity.ok(ApiResponse.success(departmentService.getAggregates()));
     }
 
     @GetMapping("/{id}")

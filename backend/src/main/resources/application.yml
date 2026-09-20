@@ -5,6 +5,12 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
 
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017}
+      database: ${MONGODB_DATABASE:placement_portal}
+      auto-index-creation: true
+
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
@@ -30,6 +36,14 @@ logging:
 app:
   seed-bulk-demo-data: ${SEED_BULK_DEMO_DATA:false}
   seed-bulk-demo-cleanup: ${SEED_BULK_DEMO_CLEANUP:false}
+  messaging:
+    storage: ${APP_MESSAGING_STORAGE:postgres}
+  mongodb:
+    enabled: ${APP_MONGODB_ENABLED:true}
+    required: ${APP_MONGODB_REQUIRED:false}
+    migrate-enabled: ${MIGRATE_MESSAGES_TO_MONGO:false}
+    validate-enabled: ${VALIDATE_MESSAGES_MIGRATION:false}
+    perf-enabled: ${MONGO_PERF_PROBE:false}
 
 springdoc:
   api-docs:

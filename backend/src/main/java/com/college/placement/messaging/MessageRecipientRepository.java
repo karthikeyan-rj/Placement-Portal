@@ -35,17 +35,9 @@ public interface MessageRecipientRepository extends JpaRepository<MessageRecipie
             "FROM MessageRecipient mr WHERE mr.message.id IN :ids GROUP BY mr.message.id")
     List<MessageRecipientStats> aggregateStats(@Param("ids") Collection<Long> ids);
 
-    @Query(value = "SELECT mr.message_id AS messageId, " +
-            "COUNT(DISTINCT mr.id) AS total, " +
-            "COUNT(DISTINCT mr.id) FILTER (WHERE mr.delivered_at IS NOT NULL) AS delivered, " +
-            "COUNT(DISTINCT mr.id) FILTER (WHERE mr.read_at IS NOT NULL) AS readCount, " +
-            "COUNT(DISTINCT r.id) FILTER (WHERE r.reaction = 'UPVOTE') AS upvotes, " +
-            "COUNT(DISTINCT r.id) FILTER (WHERE r.reaction = 'DOWNVOTE') AS downvotes " +
-            "FROM message_recipients mr " +
-            "LEFT JOIN message_reactions r ON r.message_id = mr.message_id " +
-            "WHERE mr.message_id IN (:ids) GROUP BY mr.message_id",
-            nativeQuery = true)
-    List<CombinedMessageStats> aggregateAllStats(@Param("ids") Collection<Long> ids);
+    @Query("SELECT mr.message.id AS messageId, (mr.readAt IS NOT NULL) AS readFlag " +
+            "FROM MessageRecipient mr WHERE mr.message.id IN :ids AND mr.recipient.id = :recipientId")
+    List<MessageReadFlag> findReadFlags(@Param("ids") Collection<Long> ids, @Param("recipientId") Long recipientId);
 
     interface MessageRecipientStats {
         Long getMessageId();
@@ -54,9 +46,8 @@ public interface MessageRecipientRepository extends JpaRepository<MessageRecipie
         Long getRead();
     }
 
-    interface CombinedMessageStats extends MessageRecipientStats {
-        Long getReadCount();
-        Long getUpvotes();
-        Long getDownvotes();
+    interface MessageReadFlag {
+        Long getMessageId();
+        Boolean getReadFlag();
     }
 }

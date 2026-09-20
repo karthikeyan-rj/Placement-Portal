@@ -128,7 +128,7 @@ export default function PODashboard() {
             label="Total Students"
             value={stats?.totalStudents ?? 0}
             icon={Users}
-            sub={`${stats?.activeStudents ?? 0} active`}
+            sub={`${stats?.totalPrs ?? 0} PRs included`}
             href="/students"
           />
           <MetricCard

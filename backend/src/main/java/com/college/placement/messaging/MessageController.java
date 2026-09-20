@@ -57,6 +57,12 @@ public class MessageController {
         return ResponseEntity.ok(ApiResponse.success("Reaction recorded", null));
     }
 
+    @GetMapping("/{messageId}/my-reaction")
+    public ResponseEntity<ApiResponse<com.college.placement.messaging.dto.MyReactionResponse>> getMyReaction(
+            @PathVariable Long messageId) {
+        return ResponseEntity.ok(ApiResponse.success(messageService.getMyReaction(messageId)));
+    }
+
     @GetMapping("/{messageId}/analytics/{type}")
     public ResponseEntity<ApiResponse<Long>> getAnalytics(
             @PathVariable Long messageId,

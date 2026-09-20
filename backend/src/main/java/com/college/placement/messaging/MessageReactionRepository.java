@@ -1,5 +1,6 @@
 package com.college.placement.messaging;
 
+import com.college.placement.common.enums.MessageReactionType;
 import com.college.placement.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -27,9 +28,18 @@ public interface MessageReactionRepository extends JpaRepository<MessageReaction
             "FROM MessageReaction mr WHERE mr.message.id IN :ids GROUP BY mr.message.id")
     List<MessageReactionStats> aggregateStats(@Param("ids") Collection<Long> ids);
 
+    @Query("SELECT mr.message.id AS messageId, mr.reaction AS reaction " +
+            "FROM MessageReaction mr WHERE mr.message.id IN :ids AND mr.user.id = :userId")
+    List<MyReactionFlag> findMyReactions(@Param("ids") Collection<Long> ids, @Param("userId") Long userId);
+
     interface MessageReactionStats {
         Long getMessageId();
         Long getUpvotes();
         Long getDownvotes();
+    }
+
+    interface MyReactionFlag {
+        Long getMessageId();
+        MessageReactionType getReaction();
     }
 }

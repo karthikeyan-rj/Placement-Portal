@@ -5,6 +5,14 @@ import com.college.placement.department.Department;
 import com.college.placement.department.DepartmentRepository;
 import com.college.placement.department.PrConfig;
 import com.college.placement.department.PrConfigRepository;
+import com.college.placement.student.StudentAcademic;
+import com.college.placement.student.StudentAcademicRepository;
+import com.college.placement.student.StudentPlacementInfo;
+import com.college.placement.student.StudentPlacementInfoRepository;
+import com.college.placement.student.StudentProfessional;
+import com.college.placement.student.StudentProfessionalRepository;
+import com.college.placement.student.StudentProfile;
+import com.college.placement.student.StudentProfileRepository;
 import com.college.placement.user.User;
 import com.college.placement.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -170,6 +178,69 @@ public class DataInitializer {
             log.info("PC ECE: pc.ece1@example.com / pc123");
             log.info("Student CSE: student1@example.com / student123");
             log.info("Student ECE: student3@example.com / student123");
+        };
+    }
+
+    // F5: repair the known demo seed accounts whose Users exist but whose
+    // StudentProfile (and dependents) are missing. Runs on every startup AFTER
+    // normal seeding and is limited to the demo/test namespace only — real data
+    // is never auto-modified. Register numbers are deterministic and derived
+    // from the account email so repeats are idempotent.
+    @Bean
+    @Order(2)
+    CommandLineRunner repairDemoStudentProfiles(UserRepository userRepository,
+                                                StudentProfileRepository profileRepository,
+                                                StudentAcademicRepository academicRepository,
+                                                StudentProfessionalRepository professionalRepository,
+                                                StudentPlacementInfoRepository placementInfoRepository) {
+        return args -> {
+            List<String> demoEmails = List.of(
+                    "student1@example.com", "student2@example.com", "student3@example.com");
+            int[] repaired = {0};
+
+            for (String email : demoEmails) {
+                userRepository.findByEmail(email).ifPresent(user -> {
+                    if (profileRepository.existsByUserId(user.getId())) return;
+
+                    String registerNumber = switch (email) {
+                        case "student2@example.com" -> "REG1002";
+                        case "student3@example.com" -> "REG1003";
+                        default -> "REG1001";
+                    };
+                    if (profileRepository.existsByRegisterNumber(registerNumber)) {
+                        log.warn("Register number {} already taken; cannot auto-repair profile for {}", registerNumber, email);
+                        return;
+                    }
+
+                    StudentProfile profile = StudentProfile.builder()
+                            .user(user)
+                            .registerNumber(registerNumber)
+                            .build();
+                    profile = profileRepository.save(profile);
+                    academicRepository.save(StudentAcademic.builder().studentProfile(profile).build());
+                    professionalRepository.save(StudentProfessional.builder().studentProfile(profile).build());
+                    placementInfoRepository.save(StudentPlacementInfo.builder().studentProfile(profile).build());
+                    log.info("Repaired missing StudentProfile for demo account {} (register {})", email, registerNumber);
+                    repaired[0]++;
+                });
+            }
+
+            List<User> activeWithoutProfile = userRepository.findByActiveTrue().stream()
+                    .filter(u -> u.getRole() == Role.STUDENT || u.getRole() == Role.PR)
+                    .filter(u -> !profileRepository.existsByUserId(u.getId()))
+                    .toList();
+            if (activeWithoutProfile.isEmpty()) {
+                log.info("Integrity check: every active STUDENT/PR user has a StudentProfile.");
+            } else {
+                long nonDemo = activeWithoutProfile.stream()
+                        .filter(u -> !demoEmails.contains(u.getEmail()))
+                        .count();
+                log.warn("Integrity check: {} active STUDENT/PR user(s) lack a StudentProfile ({} outside demo namespace) — not auto-created.",
+                        activeWithoutProfile.size(), nonDemo);
+            }
+            if (repaired[0] > 0) {
+                log.info("Seed integrity repair applied to {} demo account(s).", repaired[0]);
+            }
         };
     }
 }

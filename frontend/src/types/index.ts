@@ -23,6 +23,16 @@ export interface LoginResponse {
   departmentName: string | null;
 }
 
+export interface MeResponse {
+  id: number;
+  name: string;
+  email: string;
+  role: 'PO' | 'PC' | 'PR' | 'STUDENT';
+  departmentId: number | null;
+  departmentName: string | null;
+  active: boolean;
+}
+
 export interface RegisterResponse {
   userId: number;
   name: string;
@@ -137,6 +147,41 @@ export interface Message {
   readCount: number;
   upvoteCount: number;
   downvoteCount: number;
+  clarificationCount?: number;
+  openClarificationCount?: number;
+  answeredClarificationCount?: number;
+  readByRecipient?: boolean;
+  myReaction?: 'UPVOTE' | 'DOWNVOTE' | null;
+}
+
+export interface ClarificationEntry {
+  id: number;
+  authorId: number;
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ClarificationThread {
+  threadId: number;
+  messageId: number;
+  messageTitle: string;
+  requesterId: number;
+  requesterName: string;
+  senderId: number;
+  senderName: string;
+  senderRole: string;
+  status: 'OPEN' | 'ANSWERED';
+  createdAt: string | null;
+  updatedAt: string | null;
+  entries?: ClarificationEntry[];
+  totalEntries?: number;
+}
+
+export interface ClarificationCounts {
+  total: number;
+  open: number;
+  answered: number;
 }
 
 export interface ContactRequest {
@@ -174,9 +219,55 @@ export interface StudentInterview {
 
 export interface UserStats {
   totalStudents: number;
-  activeStudents: number;
   totalPcs: number;
   totalPrs: number;
+  totalPOs: number;
+}
+
+export interface DepartmentAggregate {
+  departmentId: number;
+  departmentName: string;
+  active: boolean;
+  prLimit: number | null;
+  studentCount: number;
+  pcCount: number;
+  prCount: number;
+}
+
+export interface CompanyOption {
+  id: number;
+  name: string;
+}
+
+export interface ReportDepartmentRow {
+  departmentId: number | null;
+  departmentName: string;
+  studentCount: number;
+  interestedCount: number;
+  placedCount: number;
+  placementRate: number;
+}
+
+export interface ReportBatchRow {
+  batch: string;
+  studentCount: number;
+  interestedCount: number;
+  placedCount: number;
+  placementRate: number;
+}
+
+export interface ReportSummary {
+  totalStudentPopulation: number;
+  placementInterested: number;
+  placed: number;
+  notPlaced: number;
+  blocked: number;
+  placementRate: number;
+  activeDrives: number;
+  completedDrives: number;
+  activeCompanies: number;
+  byDepartment: ReportDepartmentRow[];
+  byBatch: ReportBatchRow[];
 }
 
 export interface AuditLog {

@@ -1,6 +1,15 @@
 import api from './axios';
 import { invalidate, cacheGet, cacheSet } from './cache';
-import type { ApiResponse, Department, StudentProfile, Company } from '../types';
+import type {
+  ApiResponse,
+  Department,
+  DepartmentAggregate,
+  StudentProfile,
+  Company,
+  CompanyOption,
+  User,
+  MeResponse,
+} from '../types';
 
 // Cache stable reference data (departments, companies, current user profile) in
 // memory, scoped by role+user, TTL 30s, invalidated on the relevant mutations.
@@ -37,6 +46,7 @@ export const authApi = {
   }) => api.post('/auth/register', data),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
+  me: () => api.get<MeResponse>('/auth/me'),
 };
 
 // Public
@@ -46,10 +56,20 @@ export const publicApi = {
 
 // Users
 export const userApi = {
-  search: (params: { search?: string; page?: number; size?: number }) =>
-    api.get('/users', { params }),
-  getAll: (params?: { search?: string; page?: number; size?: number }) =>
-    api.get('/users', { params }),
+  search: (params: {
+    search?: string;
+    role?: User['role'];
+    departmentId?: number;
+    page?: number;
+    size?: number;
+  }) => api.get('/users', { params }),
+  getAll: (params?: {
+    search?: string;
+    role?: User['role'];
+    departmentId?: number;
+    page?: number;
+    size?: number;
+  }) => api.get('/users', { params }),
   getById: (id: number) => api.get(`/users/${id}`),
   create: async (data: {
     name: string;
@@ -84,6 +104,7 @@ export const userApi = {
 export const departmentApi = {
   getAll: () => refList<ApiResponse<Department[]>>('/departments'),
   getActive: () => refList<ApiResponse<Department[]>>('/departments/active'),
+  aggregates: () => refGet<ApiResponse<DepartmentAggregate[]>>('/departments/aggregates'),
   getById: (id: number) => refGet<ApiResponse<Department>>(`/departments/${id}`),
   create: async (data: { name: string }) => {
     const r = await api.post('/departments', data);
@@ -112,12 +133,18 @@ export const studentApi = {
   search: (params: {
     search?: string;
     departmentId?: number;
+    role?: User['role'];
+    placementInterested?: boolean;
+    placementStatus?: string;
     page?: number;
     size?: number;
   }) => api.get('/students', { params }),
   getAll: (params?: {
     search?: string;
     departmentId?: number;
+    role?: User['role'];
+    placementInterested?: boolean;
+    placementStatus?: string;
     page?: number;
     size?: number;
   }) => api.get('/students', { params }),
@@ -187,6 +214,7 @@ export const companyApi = {
     api.get('/companies', { params }),
   getAll: (params?: { search?: string; page?: number; size?: number }) =>
     api.get('/companies', { params }),
+  options: () => refGet<ApiResponse<CompanyOption[]>>('/companies/options'),
   getById: (id: number) => refGet<ApiResponse<Company>>(`/companies/${id}`),
   create: async (data: {
     name: string;
@@ -310,6 +338,23 @@ export const messageApi = {
   },
   getAnalytics: (messageId: number, type: string) =>
     api.get(`/messages/${messageId}/analytics/${type}`),
+  getMyReaction: (messageId: number) =>
+    api.get(`/messages/${messageId}/my-reaction`),
+};
+
+// Clarifications (on PO/PC-sent messages)
+export const clarificationApi = {
+  create: (messageId: number, content: string) =>
+    api.post(`/messages/${messageId}/clarifications`, { content }),
+  listForMessage: (messageId: number, params?: { page?: number; size?: number }) =>
+    api.get(`/messages/${messageId}/clarifications`, { params }),
+  counts: (messageId: number) => api.get(`/messages/${messageId}/clarification-counts`),
+  getThread: (threadId: number, params?: { page?: number; size?: number }) =>
+    api.get(`/clarifications/${threadId}`, { params }),
+  reply: (threadId: number, content: string) =>
+    api.post(`/clarifications/${threadId}/replies`, { content }),
+  incoming: (params?: { page?: number; size?: number }) =>
+    api.get('/clarifications/incoming', { params }),
 };
 
 // Contact Requests
@@ -354,6 +399,10 @@ export const studentInterviewApi = {
 
 // Reports
 export const reportApi = {
+  summary: (departmentId?: number) =>
+    api.get('/reports/summary', {
+      params: departmentId ? { departmentId } : {},
+    }),
   students: (departmentId?: number) =>
     api.get('/reports/students/csv', {
       params: departmentId ? { departmentId } : {},

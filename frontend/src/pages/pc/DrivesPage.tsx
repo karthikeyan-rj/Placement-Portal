@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { companyApi, placementDriveApi, departmentApi } from '../../api/api';
-import type { PlacementDrive, Company, Department } from '../../types';
+import type { PlacementDrive, CompanyOption, Department } from '../../types';
 import { getErrorMessage } from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -146,7 +146,7 @@ export default function DrivesPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [companyFilter, setCompanyFilter] = useState('ALL');
 
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -186,8 +186,8 @@ export default function DrivesPage() {
 
   useEffect(() => {
     companyApi
-      .getAll({ size: 1000 })
-      .then((res) => setCompanies(res.data?.data?.content ?? []))
+      .options()
+      .then((res) => setCompanies(res.data?.data ?? []))
       .catch(() => {});
     departmentApi
       .getActive()

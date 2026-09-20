@@ -15,6 +15,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class CompanyService {
@@ -27,6 +29,15 @@ public class CompanyService {
     public Page<CompanyResponse> searchCompanies(String search, Pageable pageable) {
         return companyRepository.searchCompanies(search, pageable).map(this::toResponse);
     }
+
+    @Transactional(readOnly = true)
+    public List<CompanyOptionResponse> getOptions() {
+        return companyRepository.findActiveOptions().stream()
+                .map(o -> new CompanyOptionResponse(o.getId(), o.getName()))
+                .toList();
+    }
+
+    public record CompanyOptionResponse(Long id, String name) {}
 
     @Transactional(readOnly = true)
     public CompanyResponse getCompanyById(Long id) {

@@ -113,6 +113,9 @@ export default function StudentsPage() {
       const res = await studentApi.getAll({
         search: debouncedSearch || undefined,
         departmentId: deptFilter ? Number(deptFilter) : undefined,
+        placementInterested:
+          interestFilter === 'INTERESTED' ? true : interestFilter === 'NOT_INTERESTED' ? false : undefined,
+        placementStatus: statusFilter || undefined,
         page,
         size: 20,
       });
@@ -132,7 +135,7 @@ export default function StudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, deptFilter, page]);
+  }, [debouncedSearch, deptFilter, interestFilter, statusFilter, page]);
 
   useEffect(() => {
     fetchStudents();
@@ -149,7 +152,7 @@ export default function StudentsPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch, deptFilter]);
+  }, [debouncedSearch, deptFilter, interestFilter, statusFilter]);
 
   useEffect(() => {
     if (!menu) return;
@@ -274,21 +277,11 @@ export default function StudentsPage() {
     setStatusFilter('');
   };
 
-  const filteredStudents = students.filter((s) => {
-    if (deptFilter && s.departmentId !== Number(deptFilter)) return false;
-    if (interestFilter) {
-      const interested = s.placementInterested === true;
-      if (interestFilter === 'INTERESTED' && !interested) return false;
-      if (interestFilter === 'NOT_INTERESTED' && interested) return false;
-    }
-    if (statusFilter && s.placementStatus !== statusFilter) return false;
-    return true;
-  });
-
-  const hasLocalFilter = !!interestFilter || !!statusFilter || !!deptFilter;
-  const hasActiveFilters = !!search || !!deptFilter || hasLocalFilter;
-  const countText = hasLocalFilter
-    ? `${filteredStudents.length} of ${totalElements} ${totalElements === 1 ? 'student' : 'students'}`
+  // Interest/status filters are applied server-side now (F1); the rows returned
+  // by /students already match every active filter.
+  const hasActiveFilters = !!search || !!deptFilter || !!interestFilter || !!statusFilter;
+  const countText = hasActiveFilters
+    ? `${students.length} of ${totalElements} ${totalElements === 1 ? 'student' : 'students'}`
     : `${totalElements} ${totalElements === 1 ? 'student' : 'students'}`;
 
   const getStatusBadge = (status: string | null) => {
@@ -452,7 +445,7 @@ export default function StudentsPage() {
                     ),
                 },
               ]}
-              data={filteredStudents}
+              data={students}
               rowKey={(s) => s.id}
               density="compact"
               loading={loading}

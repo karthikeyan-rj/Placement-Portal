@@ -1,15 +1,19 @@
 package com.college.placement.report;
 
+import com.college.placement.common.enums.PlacementDriveStatus;
 import com.college.placement.common.enums.Role;
 import com.college.placement.common.exception.ForbiddenException;
 import com.college.placement.common.exception.ResourceNotFoundException;
+import com.college.placement.company.CompanyRepository;
 import com.college.placement.messaging.Message;
 import com.college.placement.messaging.MessageRecipient;
 import com.college.placement.messaging.MessageRecipientRepository;
 import com.college.placement.messaging.MessageReaction;
 import com.college.placement.messaging.MessageReactionRepository;
 import com.college.placement.messaging.MessageRepository;
+import com.college.placement.placement.PlacementDriveRepository;
 import com.college.placement.placement.PlacementRecordRepository;
+import com.college.placement.report.dto.ReportSummaryResponse;
 import com.college.placement.security.SecurityUtils;
 import com.college.placement.student.StudentAcademic;
 import com.college.placement.student.StudentAcademicRepository;
@@ -24,6 +28,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,10 +44,105 @@ public class ReportService {
     private final MessageRecipientRepository recipientRepository;
     private final MessageReactionRepository reactionRepository;
     private final PlacementRecordRepository placementRecordRepository;
+    private final PlacementDriveRepository placementDriveRepository;
+    private final CompanyRepository companyRepository;
     private final StudentProfileRepository profileRepository;
     private final StudentAcademicRepository academicRepository;
     private final StudentPlacementInfoRepository placementInfoRepository;
     private final SecurityUtils securityUtils;
+
+    private static double rate(long placed, long total) {
+        return total > 0 ? Math.round(placed * 1000.0 / total) / 10.0 : 0.0;
+    }
+
+    // Aggregate summary computed entirely in the database (F4): no full DTO
+    // downloads. PO gets a global view; PC is forced into their own department.
+    @Transactional(readOnly = true)
+    public ReportSummaryResponse getSummary(Long departmentId) {
+        Role currentRole = securityUtils.getCurrentUserRole();
+
+        Long scopeDeptId = departmentId;
+        if (currentRole == Role.PC) {
+            Long ownDeptId = securityUtils.getCurrentUser().getDepartment() != null
+                    ? securityUtils.getCurrentUser().getDepartment().getId() : null;
+            if (ownDeptId == null) {
+                throw new ForbiddenException("You are not assigned to a department.");
+            }
+            if (scopeDeptId != null && !scopeDeptId.equals(ownDeptId)) {
+                throw new ForbiddenException("You can only view summaries for your own department.");
+            }
+            scopeDeptId = ownDeptId;
+        } else if (currentRole != Role.PO) {
+            throw new ForbiddenException("You do not have permission to view report summaries.");
+        }
+
+        long total = profileRepository.countActivePopulation(scopeDeptId);
+        long interested = profileRepository.countPlacementInterested(scopeDeptId);
+
+        long placed = 0;
+        long blocked = 0;
+        for (StudentProfileRepository.StatusCountProjection row : profileRepository.countByPlacementStatus(scopeDeptId)) {
+            String status = row.getStatus();
+            if ("PLACED".equals(status)) placed = row.getCount();
+            else if ("BLOCKED".equals(status)) blocked = row.getCount();
+        }
+        long notPlaced = total - placed - blocked;
+
+        long activeDrives = placementDriveRepository.countActive(
+                List.of(PlacementDriveStatus.COMPLETED, PlacementDriveStatus.CANCELLED));
+        long completedDrives = placementDriveRepository.countByStatus(PlacementDriveStatus.COMPLETED);
+        long activeCompanies = companyRepository.countByActiveTrue();
+
+        List<ReportSummaryResponse.DepartmentRow> byDepartment = new ArrayList<>();
+        for (StudentProfileRepository.DepartmentAggregateProjection row
+                : profileRepository.summarizeByDepartment(scopeDeptId)) {
+            String name = row.getDepartmentName() != null
+                    ? row.getDepartmentName() : "Department #" + row.getDepartmentId();
+            byDepartment.add(ReportSummaryResponse.DepartmentRow.builder()
+                    .departmentId(row.getDepartmentId())
+                    .departmentName(name)
+                    .studentCount(row.getStudentCount())
+                    .interestedCount(row.getInterestedCount())
+                    .placedCount(row.getPlacedCount())
+                    .placementRate(rate(row.getPlacedCount(), row.getStudentCount()))
+                    .build());
+        }
+        byDepartment.sort(Comparator
+                .comparingLong(ReportSummaryResponse.DepartmentRow::getPlacedCount).reversed()
+                .thenComparing(Comparator.comparingLong(ReportSummaryResponse.DepartmentRow::getStudentCount).reversed()));
+
+        List<ReportSummaryResponse.BatchRow> byBatch = new ArrayList<>();
+        for (StudentProfileRepository.BatchAggregateProjection row
+                : profileRepository.summarizeByBatch(scopeDeptId)) {
+            String batch = row.getBatch() != null && !row.getBatch().isBlank()
+                    ? row.getBatch() : "Not specified";
+            byBatch.add(ReportSummaryResponse.BatchRow.builder()
+                    .batch(batch)
+                    .studentCount(row.getStudentCount())
+                    .interestedCount(row.getInterestedCount())
+                    .placedCount(row.getPlacedCount())
+                    .placementRate(rate(row.getPlacedCount(), row.getStudentCount()))
+                    .build());
+        }
+        byBatch.sort(Comparator
+                .comparing(ReportSummaryResponse.BatchRow::getBatch,
+                        Comparator.comparing((String b) -> "Not specified".equals(b))
+                                .thenComparing(Comparator.naturalOrder())));
+
+        return ReportSummaryResponse.builder()
+                .totalStudentPopulation(total)
+                .placementInterested(interested)
+                .placed(placed)
+                .notPlaced(notPlaced)
+                .blocked(blocked)
+                .placementRate(rate(placed, total))
+                .activeDrives(activeDrives)
+                .completedDrives(completedDrives)
+                .activeCompanies(activeCompanies)
+                .byDepartment(byDepartment)
+                .byBatch(byBatch)
+                .build();
+    }
 
     @Transactional(readOnly = true)
     public void exportMessageAcknowledgements(Long messageId, HttpServletResponse response) throws Exception {

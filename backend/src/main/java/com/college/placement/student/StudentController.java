@@ -2,6 +2,7 @@ package com.college.placement.student;
 
 import com.college.placement.common.dto.ApiResponse;
 import com.college.placement.common.dto.PaginatedResponse;
+import com.college.placement.common.enums.Role;
 import com.college.placement.student.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,11 +23,15 @@ public class StudentController {
     public ResponseEntity<ApiResponse<PaginatedResponse<?>>> searchStudents(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) Role role,
+            @RequestParam(required = false) Boolean placementInterested,
+            @RequestParam(required = false) String placementStatus,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Page<?> result = studentService.searchStudents(
-                search, departmentId, PageRequest.of(page, size));
+                search, departmentId, role != null ? role.name() : null,
+                placementInterested, placementStatus, PageRequest.of(page, size));
 
         PaginatedResponse<?> paginated = PaginatedResponse.<Object>builder()
                 .content(new java.util.ArrayList<>(result.getContent()))
