@@ -33,6 +33,17 @@ export interface MeResponse {
   active: boolean;
 }
 
+export interface ProfileResponse {
+  id: number;
+  name: string;
+  email: string;
+  role: 'PO' | 'PC' | 'PR' | 'STUDENT';
+  active: boolean;
+  departmentId: number | null;
+  departmentName: string | null;
+  studentProfile: StudentProfile | null;
+}
+
 export interface RegisterResponse {
   userId: number;
   name: string;
@@ -277,5 +288,53 @@ export interface AuditLog {
   entityType: string;
   entityId: number | null;
   details: string | null;
+  createdAt: string;
+}
+
+export interface ResumeSectionCheck {
+  name: string;
+  found: boolean;
+}
+
+export interface ResumeContactChecks {
+  emailPresent: boolean;
+  phonePresent: boolean;
+  linkedinPresent: boolean;
+  githubPresent: boolean;
+  portfolioPresent: boolean;
+}
+
+export interface ResumeRecommendation {
+  level: 'HIGH' | 'MEDIUM' | 'LOW';
+  text: string;
+}
+
+export interface ResumeAnalysis {
+  id: number;
+  fileName: string;
+  fileSize: number | null;
+  pageCount: number | null;
+  readinessScore: number;
+  atsCompatibility: number;
+  categoryScores: {
+    profileCompleteness: number;
+    contentQuality: number;
+    impact: number;
+    formatting: number;
+    professionalLinks: number;
+  };
+  sections: ResumeSectionCheck[];
+  contactChecks: ResumeContactChecks;
+  detectedSkills: string[];
+  warnings: string[];
+  recommendations: ResumeRecommendation[];
+  createdAt: string;
+}
+
+export interface ResumeAnalysisSummary {
+  id: number;
+  fileName: string;
+  pageCount: number | null;
+  readinessScore: number;
   createdAt: string;
 }

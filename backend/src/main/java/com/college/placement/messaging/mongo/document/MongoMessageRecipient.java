@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 @CompoundIndexes({
         @CompoundIndex(name = "idx_recip_msg_user_unique", def = "{'messageId': 1, 'recipientUserId': 1}", unique = true),
         @CompoundIndex(name = "idx_recip_user_created", def = "{'recipientUserId': 1, 'createdAt': -1}"),
+        @CompoundIndex(name = "idx_recip_user_unread", def = "{'recipientUserId': 1, 'readAt': 1}"),
         @CompoundIndex(name = "idx_recip_msg_read", def = "{'messageId': 1, 'readAt': 1}"),
         @CompoundIndex(name = "idx_recip_msg_reaction", def = "{'messageId': 1, 'reaction': 1}")
 })

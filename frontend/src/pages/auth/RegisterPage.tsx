@@ -105,7 +105,7 @@ export default function RegisterPage() {
                 <div className={`flex h-10 w-56 items-center justify-center rounded-[10px] text-[13px] font-medium transition-colors ${
                   role.active
                     ? 'bg-white/10 text-white border border-white/10'
-                    : 'bg-white/5 text-white/50 border border-white/5'
+                    : 'bg-white/5 text-white/70 border border-white/5'
                 }`}>
                   {role.active ? (
                     <span className="flex items-center gap-2">
@@ -157,7 +157,7 @@ export default function RegisterPage() {
 
               {/* Section: Verify your identity */}
               <div>
-                <h3 className="text-[13px] font-semibold uppercase tracking-wider text-neutral-400 mb-4">
+                <h3 className="text-[13px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">
                   Verify your identity
                 </h3>
                 <div className="flex flex-col" style={{ gap: '20px' }}>
@@ -203,7 +203,7 @@ export default function RegisterPage() {
 
               {/* Section: Create your password */}
               <div>
-                <h3 className="text-[13px] font-semibold uppercase tracking-wider text-neutral-400 mb-4">
+                <h3 className="text-[13px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">
                   Create your password
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

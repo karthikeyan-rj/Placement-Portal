@@ -396,7 +396,7 @@ export default function LandingPage() {
                 Ready to access the Placement Portal?
               </span>
             </h2>
-            <p className="relative mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-white/60">
+            <p className="relative mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-white/75">
               Students can create an account to manage their placement journey.
             </p>
             <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">

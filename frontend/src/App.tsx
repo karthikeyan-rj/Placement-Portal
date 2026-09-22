@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense, type ReactNode } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DevModeProvider } from './context/DevModeContext';
+import { NotificationsProvider } from './context/NotificationsContext';
 import PublicLayout from './components/public/PublicLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthorizedRoute from './components/AuthorizedRoute';
@@ -30,9 +31,10 @@ const DrivesPage = lazy(() => import('./pages/pc/DrivesPage'));
 const MessagesPage = lazy(() => import('./pages/pr/MessagesPage'));
 const ContactRequestsPage = lazy(() => import('./pages/pr/ContactRequestsPage'));
 
-const ProfilePage = lazy(() => import('./pages/student/ProfilePage'));
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const StudentDrivesPage = lazy(() => import('./pages/student/DrivesPage'));
 const InterviewsPage = lazy(() => import('./pages/student/InterviewsPage'));
+const ResumeAnalyzerPage = lazy(() => import('./pages/student/ResumeAnalyzerPage'));
 
 function SuspenseRoute({ children }: { children: ReactNode }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
@@ -54,6 +56,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <DevModeProvider>
+          <NotificationsProvider>
           <Routes>
             {/* Public layout — landing, login, register */}
             <Route element={<PublicLayout />}>
@@ -90,6 +93,7 @@ function App() {
             <Route element={<Layout />}>
               <Route path="/dashboard" element={<SuspenseRoute><DashboardPage /></SuspenseRoute>} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/profile" element={<SuspenseRoute><ProfilePage /></SuspenseRoute>} />
 
               <Route element={<AuthorizedRoute allowedRoles={['PO', 'PC', 'PR']} />}>
                 <Route path="/students" element={<SuspenseRoute><StudentsPage /></SuspenseRoute>} />
@@ -116,11 +120,11 @@ function App() {
                 <Route path="/contact-requests" element={<SuspenseRoute><ContactRequestsPage /></SuspenseRoute>} />
               </Route>
 
-              <Route element={<AuthorizedRoute allowedRoles={['STUDENT']} />}>
-                <Route path="/profile" element={<SuspenseRoute><ProfilePage /></SuspenseRoute>} />
+              <Route element={<AuthorizedRoute allowedRoles={['STUDENT', 'PR']} />}>
                 <Route path="/student/drives" element={<SuspenseRoute><StudentDrivesPage /></SuspenseRoute>} />
                 <Route path="/student/interviews" element={<SuspenseRoute><InterviewsPage /></SuspenseRoute>} />
                 <Route path="/interviews" element={<SuspenseRoute><InterviewsPage /></SuspenseRoute>} />
+                <Route path="/resume-analyzer" element={<SuspenseRoute><ResumeAnalyzerPage /></SuspenseRoute>} />
               </Route>
             </Route>
           </Route>
@@ -129,6 +133,7 @@ function App() {
           <Route path="*" element={<Navigate to="/404" replace />} />
           </Routes>
           <AppToaster />
+          </NotificationsProvider>
         </DevModeProvider>
       </AuthProvider>
     </BrowserRouter>

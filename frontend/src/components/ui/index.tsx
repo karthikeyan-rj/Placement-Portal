@@ -28,9 +28,9 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 shadow-soft hover:shadow-card hover:-translate-y-px',
+    'bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 shadow-soft',
   secondary:
-    'glass text-neutral-700 hover:bg-white/90 hover:text-neutral-900 active:bg-neutral-100',
+    'bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50 hover:border-neutral-400 hover:text-neutral-900 active:bg-neutral-100',
   ghost:
     'bg-transparent text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-800 active:bg-neutral-200/60',
   danger:
@@ -40,9 +40,9 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-[36px] px-3.5 text-[13px] font-medium gap-1.5 rounded-[10px]',
-  md: 'h-[44px] px-5 text-[14px] font-semibold gap-2 rounded-[10px]',
-  lg: 'h-[50px] px-7 text-[15px] font-semibold gap-2.5 rounded-[12px]',
+  sm: 'h-[32px] px-3 text-[13px] font-medium gap-1.5 rounded-[8px]',
+  md: 'h-[38px] px-4 text-[13.5px] font-semibold gap-2 rounded-[10px]',
+  lg: 'h-[44px] px-5 text-[14px] font-semibold gap-2 rounded-[10px]',
 };
 
 export function Button({
@@ -91,10 +91,10 @@ export function IconButton({ label, children, active, className = '', type = 'bu
       type={type}
       title={label}
       aria-label={label}
-      className={`inline-flex items-center justify-center h-9 w-9 rounded-[10px] transition-all duration-150 ${
+      className={`inline-flex items-center justify-center h-8 w-8 rounded-[8px] transition-all duration-150 ${
         active
           ? 'text-primary-600 bg-primary-50'
-          : 'text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/80'
+          : 'text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100/80'
       } ${className}`}
       {...props}
     >
@@ -119,7 +119,7 @@ function FieldLabel({
   return (
     <label
       htmlFor={htmlFor}
-      className="block text-[14px] font-medium text-neutral-600 mb-1.5"
+      className="block text-[13px] font-medium text-neutral-700 mb-1.5"
     >
       {children}
       {required && <span className="text-danger-500 ml-0.5">*</span>}
@@ -128,10 +128,10 @@ function FieldLabel({
 }
 
 const controlBase =
-  'w-full h-[48px] px-4 text-[15px] rounded-[10px] bg-white text-neutral-900 ' +
-  'border border-neutral-200/80 placeholder:text-neutral-400 ' +
+  'w-full h-[42px] px-3.5 text-[14px] rounded-[10px] bg-white text-neutral-900 ' +
+  'border border-border-strong placeholder:text-neutral-400 ' +
   'focus:outline-none focus:border-primary-400 focus:ring-[3px] focus:ring-primary-500/10 ' +
-  'hover:border-neutral-300 transition-all duration-150 ' +
+  'hover:border-neutral-500 transition-all duration-150 ' +
   'disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed';
 
 const controlError = 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/10';
@@ -189,7 +189,7 @@ export function Input({
     <FieldShell label={label} error={error} required={required} controlId={inputId}>
       <div className="relative">
         {icon && (
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-neutral-400">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-neutral-500">
             {icon}
           </div>
         )}
@@ -206,7 +206,7 @@ export function Input({
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-600 transition-colors"
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-500 hover:text-neutral-600 transition-colors"
             tabIndex={-1}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
@@ -227,7 +227,7 @@ interface SearchInputProps extends Omit<InputProps, 'icon'> {
 export function SearchInput({ className = '', ...props }: SearchInputProps) {
   return (
     <Input
-      icon={<Search size={16} className="text-neutral-400" />}
+      icon={<Search size={16} className="text-neutral-500" />}
       placeholder="Search..."
       className={className}
       {...props}
@@ -305,7 +305,7 @@ export function Textarea({ label, error, required, className = '', id, ...props 
       <textarea
         id={textareaId}
         required
-        className={`w-full px-4 py-3 text-[15px] rounded-[10px] bg-white text-neutral-900 border border-neutral-200/80 placeholder:text-neutral-400 focus:outline-none focus:border-primary-400 focus:ring-[3px] focus:ring-primary-500/10 hover:border-neutral-300 transition-all duration-150 resize-y min-h-[120px] leading-relaxed ${
+        className={`w-full px-3.5 py-2.5 text-[14px] rounded-[10px] bg-white text-neutral-900 border border-border-strong placeholder:text-neutral-400 focus:outline-none focus:border-primary-400 focus:ring-[3px] focus:ring-primary-500/10 hover:border-neutral-500 transition-all duration-150 resize-y min-h-[104px] leading-relaxed ${
           error ? controlError : ''
         } ${className}`}
         {...props}
@@ -336,7 +336,7 @@ const badgeClasses: Record<BadgeVariant, string> = {
   info: 'bg-info-50 text-info-600 ring-info-500/20',
   neutral: 'bg-neutral-100 text-neutral-600 ring-neutral-500/15',
   teal: 'bg-primary-50 text-primary-600 ring-primary-500/20',
-  department: 'bg-accent-50 text-accent-500 ring-accent-400/20',
+  department: 'bg-accent-50 text-accent-600 ring-accent-400/20',
 };
 
 const dotColors: Record<BadgeVariant, string> = {
@@ -350,8 +350,8 @@ const dotColors: Record<BadgeVariant, string> = {
 };
 
 const badgeSizes: Record<BadgeSize, string> = {
-  sm: 'px-2 py-0.5 text-[12px] gap-1',
-  md: 'px-2.5 py-[5px] text-[12.5px] font-medium gap-1.5',
+  sm: 'px-1.5 py-0.5 text-[11px] gap-1',
+  md: 'px-2 py-[3px] text-[12px] font-medium gap-1',
 };
 
 export function Badge({
@@ -386,6 +386,7 @@ interface CardProps {
   icon?: ReactNode;
   action?: ReactNode;
   glass?: boolean;
+  variant?: 'primary' | 'secondary' | 'interactive';
 }
 
 const paddingClasses = {
@@ -393,6 +394,13 @@ const paddingClasses = {
   sm: 'p-4',
   md: 'p-5',
   lg: 'p-6',
+};
+
+const cardVariants: Record<string, string> = {
+  primary: 'bg-white border-neutral-200/80 shadow-soft',
+  secondary: 'bg-neutral-50/70 border-neutral-200/60 shadow-none',
+  interactive:
+    'bg-white border-neutral-200/80 shadow-soft transition-all duration-150 hover:border-primary-200 hover:shadow-card',
 };
 
 export function Card({
@@ -406,13 +414,14 @@ export function Card({
   icon,
   action,
   glass = false,
+  variant = 'primary',
 }: CardProps) {
   const hasHeader = header !== undefined || title !== undefined;
-  const glassClass = glass ? 'glass' : 'bg-white';
+  const surfaceClass = glass ? 'glass' : cardVariants[variant];
   return (
-    <div className={`${glassClass} rounded-[14px] border ${glass ? 'border-white/40' : 'border-neutral-200/60'} shadow-card ${className}`}>
+    <div className={`${surfaceClass} rounded-[14px] border ${className}`}>
       {hasHeader && (
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-neutral-100/80">
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-neutral-100">
           {header}
           {title !== undefined && (
             <div className="flex items-center gap-3 min-w-0">
@@ -422,7 +431,7 @@ export function Card({
                   {title}
                 </h3>
                 {subtitle && (
-                  <p className="text-[13px] text-neutral-500 mt-0.5 truncate">{subtitle}</p>
+                  <p className="text-[12.5px] text-text-secondary mt-0.5 truncate">{subtitle}</p>
                 )}
               </div>
             </div>
@@ -432,7 +441,7 @@ export function Card({
       )}
       <div className={paddingClasses[padding]}>{children}</div>
       {footer && (
-        <div className="px-5 py-3.5 border-t border-neutral-100/80 bg-neutral-50/50 rounded-b-[14px]">
+        <div className="px-5 py-3 border-t border-neutral-100 bg-neutral-50/50 rounded-b-[14px]">
           {footer}
         </div>
       )}
@@ -454,7 +463,7 @@ interface StatCardProps {
 
 const statAccent: Record<string, string> = {
   teal: 'bg-primary-50 text-primary-500',
-  info: 'bg-accent-50 text-accent-400',
+  info: 'bg-accent-50 text-accent-600',
   navy: 'bg-brand-navy-50 text-neutral-800',
   none: 'bg-neutral-100 text-neutral-600',
 };
@@ -462,19 +471,19 @@ const statAccent: Record<string, string> = {
 export function StatCard({ label, value, icon, sub, accent = 'none' }: StatCardProps) {
   const chip = statAccent[accent] || statAccent.none;
   return (
-    <div className="glass rounded-[14px] border border-white/40 p-5 flex flex-col gap-3 transition-all duration-200 hover:shadow-raised hover:-translate-y-px">
+    <div className="bg-white rounded-[14px] border border-neutral-200/80 p-4 flex flex-col gap-2.5 shadow-soft transition-colors duration-150 hover:border-primary-200">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] font-medium text-neutral-500 leading-tight">{label}</p>
+        <p className="text-[12.5px] font-medium text-text-secondary leading-tight">{label}</p>
         {icon && (
-          <span className={`shrink-0 flex items-center justify-center w-9 h-9 rounded-[10px] ${chip}`}>
+          <span className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-[9px] ${chip}`}>
             {icon}
           </span>
         )}
       </div>
-      <p className="text-[28px] font-bold leading-none text-neutral-900 tracking-tight">
+      <p className="text-[26px] font-bold leading-none text-neutral-900 tracking-tight">
         {typeof value === 'number' ? value.toLocaleString() : value}
       </p>
-      {sub && <div className="text-[13px] text-neutral-500 flex items-center gap-1.5 -mt-1">{sub}</div>}
+      {sub && <div className="text-[12.5px] text-text-secondary flex items-center gap-1.5 -mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -494,10 +503,10 @@ interface ModalProps {
 }
 
 const modalSizeClasses: Record<string, string> = {
-  sm: 'max-w-md',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
+  sm: 'max-w-[460px]',
+  md: 'max-w-[680px]',
+  lg: 'max-w-[900px]',
+  xl: 'max-w-[1000px]',
 };
 
 export function Modal({
@@ -529,27 +538,27 @@ export function Modal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-dark/40 backdrop-blur-sm" onClick={onClose} />
       <div
-        className={`relative glass-strong rounded-[20px] border border-white/50 shadow-overlay w-full ${modalSizeClasses[size]} animate-fadeInScale`}
+        className={`relative glass-strong rounded-[18px] border border-white/50 shadow-overlay w-full ${modalSizeClasses[size]} animate-fadeInScale`}
       >
-        <div className="flex items-start justify-between px-6 py-5 border-b border-neutral-100/60">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-neutral-100/70">
           <div className="pr-4">
-            <h2 className="text-[18px] font-semibold text-neutral-900 leading-tight">{title}</h2>
+            <h2 className="text-[17px] font-semibold text-neutral-900 leading-tight">{title}</h2>
             {description && (
-              <p className="mt-1 text-[14px] text-neutral-500 leading-relaxed">{description}</p>
+              <p className="mt-1 text-[13.5px] text-text-secondary leading-relaxed">{description}</p>
             )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 -m-1 rounded-[10px] text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors"
+            className="p-1.5 -m-1 rounded-[8px] text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors"
             aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
-        <div className="px-6 py-6 max-h-[70vh] overflow-y-auto">{children}</div>
+        <div className="px-5 py-5 max-h-[70vh] overflow-y-auto">{children}</div>
         {actions && (
-          <div className="px-6 py-4 border-t border-neutral-100/60 flex items-center justify-end gap-3 bg-neutral-50/40 rounded-b-[20px]">
+          <div className="px-5 py-4 border-t border-neutral-100/70 flex items-center justify-end gap-3 bg-neutral-50/40 rounded-b-[18px]">
             {actions}
           </div>
         )}
@@ -592,16 +601,16 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   if (loading) {
     return (
-      <div className="bg-white rounded-[14px] border border-neutral-200/60 overflow-hidden">
-        <div className="px-5 py-4 border-b border-neutral-100/80 flex gap-4">
+      <div className="bg-white rounded-[12px] border border-neutral-200/80 overflow-hidden">
+        <div className="px-4 py-3 border-b border-neutral-100 flex gap-4">
           {columns.map((col) => (
-            <Skeleton key={col.key} className="h-3.5 flex-1" />
+            <Skeleton key={col.key} className="h-3 flex-1" />
           ))}
         </div>
         {Array.from({ length: 5 }).map((_, rowIdx) => (
           <div
             key={rowIdx}
-            className="px-5 py-6 flex gap-4 border-b border-neutral-100/60 last:border-0"
+            className="px-4 py-3.5 flex gap-4 border-b border-neutral-100 last:border-0"
           >
             {columns.map((col) => (
               <Skeleton key={col.key} className="h-3.5 flex-1" />
@@ -614,45 +623,45 @@ export function DataTable<T>({
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-[14px] border border-neutral-200/60">
-        <div className="py-16 flex flex-col items-center justify-center text-center px-4">
-          {emptyIcon && <div className="mb-3 text-neutral-300">{emptyIcon}</div>}
-          <p className="text-[15px] font-medium text-neutral-500">{emptyMessage}</p>
+      <div className="bg-white rounded-[12px] border border-neutral-200/80">
+        <div className="min-h-[180px] py-12 flex flex-col items-center justify-center text-center px-4">
+          {emptyIcon && <div className="mb-3 text-neutral-400">{emptyIcon}</div>}
+          <p className="text-[14px] font-medium text-neutral-700">{emptyMessage}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-[14px] border border-neutral-200/60 overflow-hidden">
+    <div className="bg-white rounded-[12px] border border-neutral-200/80 overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-[14px]">
+        <table className="w-full text-[13.5px]">
           <thead>
-            <tr className="border-b border-neutral-200/80 bg-primary-50/30">
+            <tr className="border-b border-neutral-200/80 bg-neutral-50/70">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-5 py-3.5 text-left text-[12px] font-semibold uppercase tracking-[0.05em] text-neutral-500 whitespace-nowrap ${col.className || ''}`}
+                  className={`px-4 py-2.5 text-left text-[11.5px] font-semibold uppercase tracking-[0.05em] text-neutral-500 whitespace-nowrap ${col.className || ''}`}
                 >
                   {col.label}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100/60">
+          <tbody className="divide-y divide-neutral-100">
             {data.map((item, index) => (
               <tr
                 key={rowKey(item)}
                 onClick={() => onRowClick?.(item)}
                 className={`transition-colors duration-120 ${
-                  onRowClick ? 'cursor-pointer hover:bg-primary-50/20' : 'hover:bg-neutral-50/60'
-                } ${index % 2 === 1 ? 'bg-neutral-50/20' : 'bg-white'}`}
+                  onRowClick ? 'cursor-pointer hover:bg-primary-50/20' : 'hover:bg-neutral-50/70'
+                }`}
               >
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-5 ${
-                      density === 'compact' ? 'py-[11px]' : 'py-[20px]'
+                    className={`px-4 ${
+                      density === 'compact' ? 'py-[9px]' : 'py-[14px]'
                     } align-middle text-neutral-700 ${col.className || ''}`}
                   >
                     {col.render
@@ -694,8 +703,8 @@ export function Pagination({
   const end = Math.min((page + 1) * pageSize, totalElements);
 
   return (
-    <div className="flex items-center justify-between gap-4 flex-wrap glass rounded-[14px] border border-white/40 px-4 py-2.5 text-[14px]">
-      <span className="text-neutral-500">
+    <div className="flex items-center justify-between gap-4 flex-wrap bg-white rounded-[12px] border border-neutral-200/80 px-4 py-2.5 text-[13px]">
+      <span className="text-text-secondary">
         Showing <span className="font-medium text-neutral-800">{start}</span>
         {' – '}
         <span className="font-medium text-neutral-800">{end}</span> of{' '}
@@ -706,10 +715,10 @@ export function Pagination({
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 0}
-          className="p-1.5 rounded-[10px] text-neutral-500 hover:bg-neutral-100/80 hover:text-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-[8px] text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Previous page"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={15} />
         </button>
         {Array.from({ length: totalPages }, (_, i) => i)
           .filter((i) => i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 1)
@@ -728,9 +737,9 @@ export function Pagination({
                 key={item}
                 type="button"
                 onClick={() => onPageChange(item)}
-                className={`min-w-[32px] h-8 rounded-[10px] text-[14px] font-medium transition-all duration-150 ${
+                className={`min-w-[28px] h-7 rounded-[8px] text-[13px] font-medium transition-colors duration-150 ${
                   item === page
-                    ? 'bg-primary-500 text-white shadow-soft'
+                    ? 'bg-primary-500 text-white'
                     : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-800'
                 }`}
               >
@@ -742,10 +751,10 @@ export function Pagination({
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages - 1}
-          className="p-1.5 rounded-[10px] text-neutral-500 hover:bg-neutral-100/80 hover:text-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-[8px] text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Next page"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={15} />
         </button>
       </div>
     </div>
@@ -781,7 +790,7 @@ Skeleton.Circle = function SkeletonCircle({ size = 40 }: { size?: number }) {
 
 Skeleton.Card = function SkeletonCard() {
   return (
-    <div className="bg-white rounded-[14px] border border-neutral-200/60 p-5 space-y-3">
+    <div className="bg-white rounded-[12px] border border-neutral-200/80 p-4 space-y-3">
       <Skeleton className="h-4 w-1/3" />
       <Skeleton.Text lines={2} />
       <Skeleton className="h-8 w-24 mt-3" />
@@ -791,14 +800,14 @@ Skeleton.Card = function SkeletonCard() {
 
 Skeleton.Table = function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="bg-white rounded-[14px] border border-neutral-200/60 overflow-hidden">
-      <div className="px-5 py-4 border-b border-neutral-100/80 flex gap-4">
+    <div className="bg-white rounded-[12px] border border-neutral-200/80 overflow-hidden">
+      <div className="px-4 py-3 border-b border-neutral-100 flex gap-4">
         {Array.from({ length: cols }).map((_, i) => (
-          <Skeleton key={i} className="h-3.5 flex-1" />
+          <Skeleton key={i} className="h-3 flex-1" />
         ))}
       </div>
       {Array.from({ length: rows }).map((_, rowIdx) => (
-        <div key={rowIdx} className="px-5 py-6 flex gap-4 border-b border-neutral-100/60 last:border-0">
+        <div key={rowIdx} className="px-4 py-3.5 flex gap-4 border-b border-neutral-100 last:border-0">
           {Array.from({ length: cols }).map((_, colIdx) => (
             <Skeleton key={colIdx} className="h-3.5 flex-1" />
           ))}
@@ -821,17 +830,17 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-14 px-4 text-center">
+    <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
       {icon && (
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[14px] bg-neutral-100/80 text-neutral-400">
+        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-[12px] bg-neutral-100 text-neutral-500 [&>svg]:h-5 [&>svg]:w-5">
           {icon}
         </div>
       )}
-      <h3 className="text-[16px] font-semibold text-neutral-800">{title}</h3>
+      <h3 className="text-[15px] font-semibold text-neutral-800">{title}</h3>
       {description && (
-        <p className="mt-1.5 text-[14px] text-neutral-500 max-w-sm leading-relaxed">{description}</p>
+        <p className="mt-1 text-[13.5px] text-text-secondary max-w-sm leading-relaxed">{description}</p>
       )}
-      {action && <div className="mt-5">{action}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
@@ -844,17 +853,17 @@ interface ErrorStateProps {
 
 export function ErrorState({ title = 'Unable to load data', message, onRetry }: ErrorStateProps) {
   return (
-    <div className="rounded-[16px] border border-danger-100 bg-danger-50/50 p-8">
-      <div className="flex flex-col items-center justify-center text-center">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-100 text-danger-500">
-          <AlertCircle size={24} />
+    <div className="rounded-[12px] border border-danger-100 bg-danger-50/50 p-5">
+      <div className="flex items-center justify-center gap-3 text-center flex-col">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-danger-100 text-danger-500">
+          <AlertCircle size={18} />
         </div>
-        <h3 className="text-[16px] font-semibold text-neutral-900">{title}</h3>
+        <h3 className="text-[14.5px] font-semibold text-neutral-900">{title}</h3>
         {message && (
-          <p className="mt-1.5 text-[14px] text-neutral-500 max-w-md leading-relaxed">{message}</p>
+          <p className="text-[13.5px] text-text-secondary max-w-md leading-relaxed">{message}</p>
         )}
         {onRetry && (
-          <Button variant="secondary" className="mt-5" onClick={onRetry}>
+          <Button variant="secondary" size="sm" className="mt-1" onClick={onRetry}>
             <RefreshCw size={14} /> Try Again
           </Button>
         )}
@@ -998,7 +1007,7 @@ export function Dropdown({ items, trigger }: DropdownProps) {
         className="cursor-pointer outline-none"
       >
         {trigger || (
-          <button type="button" aria-label="Row actions" className="p-1.5 rounded-[10px] text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100/80 transition-colors">
+          <button type="button" aria-label="Row actions" className="p-1.5 rounded-[10px] text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors">
             <MoreHorizontal size={17} />
           </button>
         )}
@@ -1020,7 +1029,7 @@ export function Dropdown({ items, trigger }: DropdownProps) {
                 setOpen(false);
               }}
               role="menuitem"
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 my-0.5 text-[14px] text-left transition-colors outline-none ${
+              className={`w-full flex items-center gap-2.5 px-3 py-2 my-0.5 text-[13.5px] rounded-[8px] text-left transition-colors outline-none ${
                 i === activeIndex ? 'bg-neutral-100/80' : ''
               } ${
                 item.danger
@@ -1029,7 +1038,7 @@ export function Dropdown({ items, trigger }: DropdownProps) {
               }`}
             >
               {item.icon && (
-                <span className={`shrink-0 ${item.danger ? 'text-danger-400' : 'text-neutral-400'}`}>
+                <span className={`shrink-0 ${item.danger ? 'text-danger-400' : 'text-neutral-500'}`}>
                   {item.icon}
                 </span>
               )}
@@ -1054,31 +1063,32 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-8 flex-wrap">
+    <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
       <div className="min-w-0">
-        <h1 className="text-[28px] font-bold tracking-[-0.025em] leading-[1.15] text-neutral-900">
+        <h1 className="text-[24px] sm:text-[30px] font-bold tracking-[-0.02em] leading-[1.15] text-neutral-900">
           {title}
         </h1>
         {description && (
-          <p className="mt-1.5 text-[14.5px] leading-relaxed text-neutral-500 max-w-2xl">
+          <p className="mt-1 text-[14px] sm:text-[15px] leading-relaxed text-text-secondary max-w-[820px]">
             {description}
           </p>
         )}
       </div>
-      {actions && <div className="shrink-0 flex items-center gap-2.5 self-center">{actions}</div>}
+      {actions && <div className="shrink-0 flex items-center gap-2.5 pb-0.5">{actions}</div>}
     </div>
   );
 }
 
 interface PageContainerProps {
   children: ReactNode;
-  size?: 'default' | 'narrow';
+  size?: 'default' | 'narrow' | 'form';
   className?: string;
 }
 
 export function PageContainer({ children, size = 'default', className = '' }: PageContainerProps) {
-  const widthClass = size === 'narrow' ? 'max-w-[1040px]' : 'max-w-[1480px]';
-  return <div className={`${widthClass} mx-auto w-full px-1 ${className}`}>{children}</div>;
+  const widthClass =
+    size === 'narrow' ? 'max-w-[1040px]' : size === 'form' ? 'max-w-[900px]' : 'max-w-none';
+  return <div className={`${widthClass} mx-auto w-full ${className}`}>{children}</div>;
 }
 
 interface FilterToolbarProps {
@@ -1089,9 +1099,9 @@ interface FilterToolbarProps {
 
 export function FilterToolbar({ search, filters, children }: FilterToolbarProps) {
   return (
-    <div className="mb-6 flex flex-wrap items-end gap-3">
-      {search && <div className="w-80 max-w-full">{search}</div>}
-      {filters && <div className="flex flex-wrap items-end gap-3">{filters}</div>}
+    <div className="flex flex-wrap items-center gap-3">
+      {search && <div className="w-72 max-w-full">{search}</div>}
+      {filters && <div className="flex flex-wrap items-center gap-2.5">{filters}</div>}
       {children && <div className="ml-auto flex items-center gap-3">{children}</div>}
     </div>
   );
@@ -1148,22 +1158,22 @@ interface BreadcrumbProps {
 
 export function Breadcrumb({ segments }: BreadcrumbProps) {
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-[14px] min-w-0">
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-[12.5px] min-w-0">
       {segments.map((seg, i) => {
         const isLast = i === segments.length - 1;
         return (
           <span key={i} className="flex items-center gap-1 min-w-0">
-            {i > 0 && <ChevronRight size={14} className="text-neutral-300 shrink-0" />}
+            {i > 0 && <ChevronRight size={12} className="text-neutral-400 shrink-0" />}
             {seg.path && !isLast ? (
               <Link
                 to={seg.path}
-                className="text-neutral-400 hover:text-primary-500 transition-colors truncate"
+                className="text-neutral-500 hover:text-primary-500 transition-colors truncate"
               >
                 {seg.label}
               </Link>
             ) : (
               <span
-                className={`truncate ${isLast ? 'font-semibold text-neutral-700' : 'text-neutral-400'}`}
+                className={`truncate ${isLast ? 'font-medium text-neutral-700' : 'text-neutral-500'}`}
               >
                 {seg.label}
               </span>
@@ -1251,7 +1261,7 @@ interface TabsProps<T extends string> {
 
 export function Tabs<T extends string>({ tabs, active, onChange }: TabsProps<T>) {
   return (
-    <div className="flex items-center gap-0.5 mb-6 flex-wrap border-b border-neutral-200/60">
+    <div className="flex items-center gap-1 mb-5 flex-wrap border-b border-neutral-200/70">
       {tabs.map((tab) => {
         const isActive = active === tab.key;
         return (
@@ -1259,10 +1269,10 @@ export function Tabs<T extends string>({ tabs, active, onChange }: TabsProps<T>)
             key={tab.key}
             type="button"
             onClick={() => onChange(tab.key)}
-            className={`px-4 py-2.5 -mb-px border-b-2 text-[14px] font-medium transition-all duration-150 ${
+            className={`px-3.5 py-2 -mb-px border-b-2 text-[13.5px] font-medium transition-all duration-150 ${
               isActive
                 ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+                : 'border-transparent text-neutral-600 hover:text-neutral-800 hover:border-neutral-300'
             }`}
           >
             {tab.label}

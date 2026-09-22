@@ -14,7 +14,7 @@ export default function PublicFooter() {
           <p className="text-[14px] text-neutral-500">
             College Placement Management System
           </p>
-          <p className="mt-4 text-[13px] text-neutral-400">
+          <p className="mt-4 text-[13px] text-neutral-500">
             © {new Date().getFullYear()} Placement Portal
           </p>
         </div>

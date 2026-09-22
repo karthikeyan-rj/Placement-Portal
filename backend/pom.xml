@@ -101,6 +101,13 @@
             <version>5.9</version>
         </dependency>
 
+        <!-- Apache PDFBox for resume text extraction (text PDFs only, no OCR/cloud) -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.5</version>
+        </dependency>
+
         <!-- OpenAPI / Swagger -->
         <dependency>
             <groupId>org.springdoc</groupId>

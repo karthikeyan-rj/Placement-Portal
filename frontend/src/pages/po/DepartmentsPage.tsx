@@ -55,20 +55,19 @@ export default function DepartmentsPage() {
   };
 
   return (
-    <div className="bg-background min-h-screen">
-      <PageContainer className="py-8">
+    <PageContainer>
         <PageHeader
           title="Departments"
           description="Academic departments and their placement responsibilities."
         />
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="glass rounded-[14px] border border-white/40 shadow-card p-6">
-                <Skeleton className="h-5 w-32 mb-4" />
-                <Skeleton className="h-3 w-40 mb-3" />
-                <Skeleton className="h-3 w-24" />
+              <div key={i} className="bg-white rounded-[14px] border border-neutral-200/80 shadow-soft p-4 space-y-3">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-3 w-28" />
               </div>
             ))}
           </div>
@@ -79,7 +78,7 @@ export default function DepartmentsPage() {
             onRetry={() => setReloadKey((k) => k + 1)}
           />
         ) : departments.length === 0 ? (
-          <div className="glass rounded-[14px] border border-white/40">
+          <div className="bg-white rounded-[14px] border border-neutral-200/80 shadow-soft">
             <EmptyState
               icon={<Building2 size={40} />}
               title="No departments available"
@@ -87,7 +86,7 @@ export default function DepartmentsPage() {
             />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {departments.map((dept) => {
               const { pcCount, prCount, studentCount } = getDeptStats(dept.id);
               const fullName = DEPT_FULL_NAMES[dept.name.toUpperCase()] || `${dept.name} Department`;
@@ -95,43 +94,42 @@ export default function DepartmentsPage() {
               return (
                 <div
                   key={dept.id}
-                  className="relative glass rounded-[14px] border border-white/40 shadow-card p-6 transition-all duration-200 hover:shadow-raised hover:-translate-y-px group"
+                  className="bg-white rounded-[14px] border border-neutral-200/80 shadow-soft p-4 transition-colors duration-150 hover:border-primary-200 hover:shadow-raised group"
                 >
-                  <div className="absolute inset-x-0 top-0 h-[3px] rounded-t-[14px] bg-gradient-to-r from-primary-500 to-primary-400" />
-                  <div className="flex items-start gap-3.5">
-                    <div className="flex items-center justify-center w-11 h-11 rounded-[12px] bg-primary-500/10 text-primary-600 shrink-0">
-                      <Building2 size={20} />
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center justify-center w-9 h-9 rounded-[9px] bg-primary-50 text-primary-600 shrink-0">
+                      <Building2 size={17} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-[16px] font-semibold text-neutral-900 tracking-[-0.01em] group-hover:text-primary-600 transition-colors">
+                      <h3 className="text-[15px] font-semibold text-neutral-900 tracking-[-0.01em] group-hover:text-primary-600 transition-colors">
                         {dept.name}
                       </h3>
-                      <p className="text-[13px] text-neutral-500 mt-0.5 leading-snug">{fullName}</p>
+                      <p className="text-[12.5px] text-neutral-500 mt-0.5 leading-snug truncate">{fullName}</p>
                     </div>
                   </div>
 
-                  <div className="mt-6 space-y-2.5">
-                    <div className="flex items-center justify-between text-[14px]">
-                      <span className="text-neutral-500 flex items-center gap-2">
-                        <Users size={14} className="text-neutral-400" /> Students
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between text-[13px]">
+                      <span className="text-neutral-500 flex items-center gap-1.5">
+                        <Users size={13} className="text-neutral-500" /> Students
                       </span>
                       <span className="font-semibold text-neutral-800 tabular-nums">{studentCount}</span>
                     </div>
-                    <div className="flex items-center justify-between text-[14px]">
-                      <span className="text-neutral-500 flex items-center gap-2">
-                        <Shield size={14} className="text-neutral-400" /> Coordinators
+                    <div className="flex items-center justify-between text-[13px]">
+                      <span className="text-neutral-500 flex items-center gap-1.5">
+                        <Shield size={13} className="text-neutral-500" /> Coordinators
                       </span>
                       <span className="font-semibold text-neutral-800 tabular-nums">{pcCount}</span>
                     </div>
-                    <div className="flex items-center justify-between text-[14px]">
-                      <span className="text-neutral-500 flex items-center gap-2">
-                        <GraduationCap size={14} className="text-neutral-400" /> Representatives
+                    <div className="flex items-center justify-between text-[13px]">
+                      <span className="text-neutral-500 flex items-center gap-1.5">
+                        <GraduationCap size={13} className="text-neutral-500" /> Representatives
                       </span>
                       <span className="font-semibold text-neutral-800 tabular-nums">{prCount}</span>
                     </div>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-white/40 flex items-center justify-end">
+                  <div className="mt-4 pt-3 border-t border-neutral-100 flex items-center justify-end">
                     <button
                       type="button"
                       onClick={() => navigate(`/students?departmentId=${dept.id}`)}
@@ -146,6 +144,5 @@ export default function DepartmentsPage() {
           </div>
         )}
       </PageContainer>
-    </div>
   );
 }

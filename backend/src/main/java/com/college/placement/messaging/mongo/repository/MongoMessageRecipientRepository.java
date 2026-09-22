@@ -29,4 +29,6 @@ public interface MongoMessageRecipientRepository extends MongoRepository<MongoMe
     long countByMessageIdAndReaction(Long messageId, String reaction);
 
     long countByRecipientUserId(Long recipientUserId);
+
+    long countByRecipientUserIdAndReadAtIsNull(Long recipientUserId);
 }

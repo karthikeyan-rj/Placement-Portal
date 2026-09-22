@@ -135,6 +135,12 @@ public class PostgresMessagingStore implements MessagingStore {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public long countUnread(Long recipientUserId) {
+        return recipientRepository.countByRecipientIdAndReadAtIsNull(recipientUserId);
+    }
+
+    @Override
     @Transactional
     public void setReaction(Long messageId, Long userId, MessageReactionType reaction) {
         MessageReaction existing = reactionRepository.findByMessageIdAndUserId(messageId, userId).orElse(null);

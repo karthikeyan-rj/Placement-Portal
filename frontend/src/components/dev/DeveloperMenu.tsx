@@ -124,7 +124,7 @@ export default function DeveloperMenu() {
           </div>
 
           {/* Role selector */}
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-400 mb-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500 mb-1.5">
             Preview role
           </p>
           <div className="flex flex-wrap gap-1.5 mb-4">
@@ -145,12 +145,12 @@ export default function DeveloperMenu() {
           </div>
 
           {/* Page links */}
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-400 mb-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500 mb-1.5">
             Preview pages
           </p>
           {grouped.map((group) => (
             <div key={group.group} className="mb-3 last:mb-0">
-              <p className="text-[11px] font-medium text-neutral-400 mb-1">{group.group}</p>
+              <p className="text-[11px] font-medium text-neutral-500 mb-1">{group.group}</p>
               <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const Icon = item.icon;
@@ -162,7 +162,7 @@ export default function DeveloperMenu() {
                       onClick={() => handleItem(item)}
                       className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-[8px] text-[13px] text-left text-neutral-700 hover:bg-neutral-100 transition-colors"
                     >
-                      <Icon size={15} className="shrink-0 text-neutral-400" />
+                      <Icon size={15} className="shrink-0 text-neutral-500" />
                       <span className="flex-1">{item.label}</span>
                       <span
                         className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
@@ -178,7 +178,7 @@ export default function DeveloperMenu() {
             </div>
           ))}
 
-          <p className="mt-3 text-[11px] leading-relaxed text-neutral-400 border-t border-neutral-100 pt-3">
+          <p className="mt-3 text-[11px] leading-relaxed text-neutral-500 border-t border-neutral-100 pt-3">
             Frontend-only preview. No backend auth is bypassed — pages load with their normal
             loading/error/empty states when no valid session exists.
           </p>

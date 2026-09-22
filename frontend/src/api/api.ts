@@ -9,6 +9,7 @@ import type {
   CompanyOption,
   User,
   MeResponse,
+  ProfileResponse,
 } from '../types';
 
 // Cache stable reference data (departments, companies, current user profile) in
@@ -49,6 +50,11 @@ export const authApi = {
   me: () => api.get<MeResponse>('/auth/me'),
 };
 
+// Profile (unified, role-aware, self-derived)
+export const profileApi = {
+  getMyProfile: () => refGet<ApiResponse<ProfileResponse>>('/profile/me'),
+};
+
 // Public
 export const publicApi = {
   departments: () => api.get('/public/departments'),
@@ -84,17 +90,17 @@ export const userApi = {
   },
   assignPc: async (userId: number, departmentId: number) => {
     const r = await api.put(`/users/${userId}/assign-pc`, { departmentId });
-    invalidate('/users', '/students', '/departments');
+    invalidate('/users', '/students', '/departments', '/profile');
     return r;
   },
   promotePr: async (userId: number) => {
     const r = await api.put(`/users/${userId}/promote-pr`);
-    invalidate('/users', '/students');
+    invalidate('/users', '/students', '/profile');
     return r;
   },
   demoteStudent: async (userId: number) => {
     const r = await api.put(`/users/${userId}/demote-student`);
-    invalidate('/users', '/students');
+    invalidate('/users', '/students', '/profile');
     return r;
   },
   getStats: () => api.get('/users/stats'),
@@ -158,7 +164,7 @@ export const studentApi = {
     section?: string;
   }) => {
     const r = await api.post('/students', data);
-    invalidate('/students');
+    invalidate('/students', '/profile');
     return r;
   },
   updateProfile: async (
@@ -172,7 +178,7 @@ export const studentApi = {
     }
   ) => {
     const r = await api.put(`/students/${id}`, data);
-    invalidate('/students');
+    invalidate('/students', '/profile');
     return r;
   },
   updateAcademic: async (
@@ -187,7 +193,7 @@ export const studentApi = {
     }
   ) => {
     const r = await api.put(`/students/${id}/academic`, data);
-    invalidate('/students');
+    invalidate('/students', '/profile');
     return r;
   },
   updateProfessional: async (
@@ -203,7 +209,7 @@ export const studentApi = {
     }
   ) => {
     const r = await api.put(`/students/${id}/professional`, data);
-    invalidate('/students');
+    invalidate('/students', '/profile');
     return r;
   },
 };
@@ -331,6 +337,7 @@ export const messageApi = {
     invalidate('/messages');
     return r;
   },
+  getUnreadCount: () => api.get('/messages/unread-count'),
   react: async (messageId: number, reaction: 'UPVOTE' | 'DOWNVOTE') => {
     const r = await api.post(`/messages/${messageId}/reaction`, { reaction });
     invalidate('/messages');
@@ -420,4 +427,18 @@ export const reportApi = {
 export const auditLogApi = {
   getAll: (params?: { page?: number; size?: number }) =>
     api.get('/audit-logs', { params }),
+};
+
+// Resume Analyzer (student-facing preparation tool)
+export const resumeAnalyzerApi = {
+  analyze: (file: File) => {
+    const data = new FormData();
+    data.append('file', file);
+    return api.post('/resume-analyzer/analyze', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  history: () => api.get('/resume-analyzer/me/history'),
+  detail: (analysisId: number) =>
+    api.get(`/resume-analyzer/me/history/${analysisId}`),
 };

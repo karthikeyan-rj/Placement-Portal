@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   DataTable,
+  FilterToolbar,
   Modal,
   PageContainer,
   PageHeader,
@@ -130,7 +131,7 @@ export default function ContactRequestsPage() {
         r.departmentName ? (
           <Badge variant="department">{r.departmentName}</Badge>
         ) : (
-          <span className="text-[14px] text-neutral-400">—</span>
+          <span className="text-[14px] text-neutral-500">—</span>
         ),
     },
     {
@@ -334,22 +335,23 @@ export default function ContactRequestsPage() {
       />
 
       {!error && (
-        <div className="mb-6 flex flex-wrap items-end gap-3">
-          <div className="w-80 max-w-full">
+        <FilterToolbar
+          search={
             <SearchInput
               placeholder="Search by student, register number, subject..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-          </div>
-          <div className="w-48">
+          }
+          filters={
             <Select
               options={STATUS_OPTIONS}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              className="w-44"
             />
-          </div>
-        </div>
+          }
+        />
       )}
 
       {renderTableBody()}
@@ -378,15 +380,15 @@ export default function ContactRequestsPage() {
                 {formatStatus(detail.status)}
               </Badge>
               {detail.resolvedAt && (
-                <span className="text-[13px] text-neutral-400">
+                <span className="text-[13px] text-neutral-500">
                   Resolved {new Date(detail.resolvedAt).toLocaleString()}
                 </span>
               )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="glass rounded-[10px] p-3.5">
-                <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
+              <div className="bg-neutral-50 border border-neutral-100 rounded-[10px] p-3.5">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">
                   From
                 </p>
                 <p className="text-[14px] font-medium text-neutral-900">{detail.studentName}</p>
@@ -395,8 +397,8 @@ export default function ContactRequestsPage() {
                   <p className="text-[13px] text-neutral-500">{detail.departmentName}</p>
                 )}
               </div>
-              <div className="glass rounded-[10px] p-3.5">
-                <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
+              <div className="bg-neutral-50 border border-neutral-100 rounded-[10px] p-3.5">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">
                   Requested Recipient
                 </p>
                 <p className="text-[14px] font-medium text-neutral-900">{detail.targetUserName}</p>
@@ -404,14 +406,14 @@ export default function ContactRequestsPage() {
             </div>
 
             <div>
-              <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-1.5">
                 Subject
               </p>
               <p className="text-[15px] font-medium text-neutral-800">{detail.subject}</p>
             </div>
 
             <div>
-              <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-1.5">
                 Message
               </p>
               <p className="text-[15px] text-neutral-700 whitespace-pre-wrap leading-relaxed">

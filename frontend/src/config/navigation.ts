@@ -6,11 +6,22 @@ import {
   GraduationCap,
   Briefcase,
   ClipboardList,
-  MessageSquare,
   Mail,
   BarChart3,
   FileText,
-  User,
+  BookOpen,
+  Mic,
+  Map,
+  CalendarDays,
+  Clock3,
+  FolderOpen,
+  Handshake,
+  Sparkles,
+  UsersRound,
+  Target,
+  Share2,
+  Trophy,
+  Bell,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -21,6 +32,12 @@ export interface NavItem {
   path: string;
   icon: LucideIcon;
   aliases?: string[];
+  /** Rendered when the feature is implemented. Hidden (no dead links) until then. */
+  enabled?: boolean;
+  /** Optional subtle label group used inside wide dropdowns (e.g. Community). */
+  section?: string;
+  /** Optional tiny helper text shown inside dropdown rows. */
+  description?: string;
 }
 
 export interface NavGroup {
@@ -49,10 +66,6 @@ export const NAV_GROUPS: Record<Role, NavGroup[]> = {
       ],
     },
     {
-      label: 'Communication',
-      items: [{ label: 'Messages', path: '/messages', icon: MessageSquare }],
-    },
-    {
       label: 'Insights',
       items: [
         { label: 'Reports', path: '/reports', icon: BarChart3 },
@@ -77,11 +90,8 @@ export const NAV_GROUPS: Record<Role, NavGroup[]> = {
       ],
     },
     {
-      label: 'Communication',
-      items: [
-        { label: 'Messages', path: '/messages', icon: MessageSquare },
-        { label: 'Contact Requests', path: '/contact-requests', icon: Mail },
-      ],
+      label: 'Contact Requests',
+      items: [{ label: 'Contact Requests', path: '/contact-requests', icon: Mail }],
     },
     {
       label: 'Insights',
@@ -94,14 +104,47 @@ export const NAV_GROUPS: Record<Role, NavGroup[]> = {
       items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
     },
     {
-      label: 'Management',
+      label: 'Students',
       items: [{ label: 'Students', path: '/students', icon: Users }],
     },
     {
-      label: 'Communication',
+      label: 'Contact Requests',
+      items: [{ label: 'Contact Requests', path: '/contact-requests', icon: Mail }],
+    },
+    {
+      label: 'Placement',
       items: [
-        { label: 'Messages', path: '/messages', icon: MessageSquare },
-        { label: 'Contact Requests', path: '/contact-requests', icon: Mail },
+        { label: 'Placement Drives', path: '/student/drives', icon: ClipboardList, aliases: ['/placement-drives'] },
+        { label: 'Interviews', path: '/student/interviews', icon: Briefcase, aliases: ['/interviews'] },
+      ],
+    },
+    {
+      label: 'Prepare',
+      items: [
+        { label: 'Interview Prep', path: '/preparation', icon: BookOpen, enabled: false },
+        { label: 'Resume Analyzer', path: '/resume-analyzer', icon: FileText },
+        { label: 'Mock Interview', path: '/mock-interview', icon: Mic, enabled: false },
+        { label: 'Skill Roadmap', path: '/skill-roadmap', icon: Map, enabled: false },
+      ],
+    },
+    {
+      label: 'Career',
+      items: [
+        { label: 'Calendar', path: '/calendar', icon: CalendarDays, enabled: false },
+        { label: 'Slots', path: '/slots', icon: Clock3, enabled: false },
+        { label: 'Documents', path: '/documents', icon: FolderOpen, enabled: false },
+      ],
+    },
+    {
+      label: 'Community',
+      items: [
+        { label: 'Mentorship', path: '/community/mentorship', icon: Handshake, section: 'Connect', enabled: false },
+        { label: 'Stories', path: '/community/stories', icon: Sparkles, section: 'Connect', enabled: false },
+        { label: 'Squads', path: '/community/squads', icon: UsersRound, section: 'Discover', enabled: false },
+        { label: 'Tracker', path: '/community/tracker', icon: Target, section: 'Discover', enabled: false },
+        { label: 'Referrals', path: '/community/referrals', icon: Share2, section: 'Progress', enabled: false },
+        { label: 'Leaderboard', path: '/community/leaderboard', icon: Trophy, section: 'Progress', enabled: false },
+        { label: 'Notifications', path: '/community/notifications', icon: Bell, section: 'Updates', enabled: false },
       ],
     },
   ],
@@ -113,24 +156,55 @@ export const NAV_GROUPS: Record<Role, NavGroup[]> = {
     {
       label: 'Placement',
       items: [
-        { label: 'My Profile', path: '/profile', icon: User },
-        { label: 'Placement Drives', path: '/student/drives', icon: ClipboardList },
+        { label: 'Placement Drives', path: '/student/drives', icon: ClipboardList, aliases: ['/placement-drives'] },
         { label: 'Interviews', path: '/student/interviews', icon: Briefcase, aliases: ['/interviews'] },
       ],
     },
     {
-      label: 'Communication',
-      items: [{ label: 'Messages', path: '/messages', icon: MessageSquare }],
+      label: 'Prepare',
+      items: [
+        { label: 'Interview Prep', path: '/preparation', icon: BookOpen, enabled: false },
+        { label: 'Resume Analyzer', path: '/resume-analyzer', icon: FileText },
+        { label: 'Mock Interview', path: '/mock-interview', icon: Mic, enabled: false },
+        { label: 'Skill Roadmap', path: '/skill-roadmap', icon: Map, enabled: false },
+      ],
+    },
+    {
+      label: 'Career',
+      items: [
+        { label: 'Calendar', path: '/calendar', icon: CalendarDays, enabled: false },
+        { label: 'Slots', path: '/slots', icon: Clock3, enabled: false },
+        { label: 'Documents', path: '/documents', icon: FolderOpen, enabled: false },
+      ],
+    },
+    {
+      label: 'Community',
+      items: [
+        { label: 'Mentorship', path: '/community/mentorship', icon: Handshake, section: 'Connect', enabled: false },
+        { label: 'Stories', path: '/community/stories', icon: Sparkles, section: 'Connect', enabled: false },
+        { label: 'Squads', path: '/community/squads', icon: UsersRound, section: 'Discover', enabled: false },
+        { label: 'Tracker', path: '/community/tracker', icon: Target, section: 'Discover', enabled: false },
+        { label: 'Referrals', path: '/community/referrals', icon: Share2, section: 'Progress', enabled: false },
+        { label: 'Leaderboard', path: '/community/leaderboard', icon: Trophy, section: 'Progress', enabled: false },
+        { label: 'Notifications', path: '/community/notifications', icon: Bell, section: 'Updates', enabled: false },
+      ],
     },
   ],
 };
 
 export const roleLabels: Record<Role, string> = {
-  PO: 'Administrator',
-  PC: 'Coordinator',
-  PR: 'Representative',
+  PO: 'Placement Officer',
+  PC: 'Placement Coordinator',
+  PR: 'Placement Representative',
   STUDENT: 'Student',
 };
+
+/** Drops not-yet-implemented items/groups so no dead links are ever rendered. */
+export function visibleGroups(groups: NavGroup[]): NavGroup[] {
+  return groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => item.enabled !== false) }))
+    .filter((group) => group.items.length > 0);
+}
 
 export function isPathActive(pathname: string, item: NavItem): boolean {
   if (pathname === item.path) return true;
@@ -160,6 +234,20 @@ export function getBreadcrumbTitle(pathname: string): string {
     '/interviews': 'My Interviews',
     '/student/drives': 'Placement Drives',
     '/student/interviews': 'My Interviews',
+    '/preparation': 'Interview Prep',
+    '/resume-analyzer': 'Resume Analyzer',
+    '/mock-interview': 'Mock Interview',
+    '/skill-roadmap': 'Skill Roadmap',
+    '/calendar': 'Calendar',
+    '/slots': 'Slots',
+    '/documents': 'Documents',
+    '/community/mentorship': 'Mentorship',
+    '/community/stories': 'Stories',
+    '/community/squads': 'Squads',
+    '/community/tracker': 'Tracker',
+    '/community/referrals': 'Referrals',
+    '/community/leaderboard': 'Leaderboard',
+    '/community/notifications': 'Notifications',
   };
   return exact[pathname] || 'Page';
 }

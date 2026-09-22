@@ -296,19 +296,18 @@ export default function StudentsPage() {
   };
 
   return (
-    <div className="bg-background min-h-screen">
-      <PageContainer className="py-8">
-        <PageHeader
-          title="Students"
-          description="Manage student profiles, academics and placement information."
-          actions={
-            <Button onClick={() => setAddModalOpen(true)} className="flex items-center gap-1.5">
-              <UserPlus size={16} /> Add Student
-            </Button>
-          }
-        />
+    <PageContainer>
+      <PageHeader
+        title="Students"
+        description="Manage student profiles, academics and placement information."
+        actions={
+          <Button onClick={() => setAddModalOpen(true)} className="flex items-center gap-1.5">
+            <UserPlus size={16} /> Add Student
+          </Button>
+        }
+      />
 
-        <div className="glass rounded-[14px] border border-white/40 p-4 mb-4">
+        <div className="bg-white rounded-[12px] border border-neutral-200/80 shadow-soft p-3.5 mb-4">
           <FilterToolbar
             search={
               <SearchInput
@@ -344,19 +343,18 @@ export default function StudentsPage() {
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="self-center px-3 py-2 text-[13px] font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50/60 rounded-[10px] transition-colors"
+                    className="self-center px-2.5 py-1.5 text-[13px] font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50/60 rounded-[8px] transition-colors"
                   >
                     Clear filters
                   </button>
                 )}
               </div>
             }
+            children={
+              <p className="text-[13px] font-medium text-text-secondary whitespace-nowrap">{countText}</p>
+            }
           />
         </div>
-
-        {!loading && (
-          <p className="mb-3 text-[14px] font-medium text-neutral-500">{countText}</p>
-        )}
 
         {error ? (
           <ErrorState title="Unable to load students" message={error} onRetry={fetchStudents} />
@@ -374,7 +372,7 @@ export default function StudentsPage() {
                         <p className="text-[14.5px] font-medium text-neutral-900 truncate">
                           {s.userName}
                         </p>
-                        <p className="text-[12.5px] text-neutral-400 truncate">{s.userEmail || '—'}</p>
+                        <p className="text-[12.5px] text-neutral-500 truncate">{s.userEmail || '—'}</p>
                       </div>
                     </div>
                   ),
@@ -395,7 +393,7 @@ export default function StudentsPage() {
                     s.departmentName ? (
                       <Badge variant="neutral">{s.departmentName}</Badge>
                     ) : (
-                      <span className="text-[14px] text-neutral-400">—</span>
+                      <span className="text-[14px] text-neutral-500">—</span>
                     ),
                 },
                 {
@@ -416,7 +414,7 @@ export default function StudentsPage() {
                     ) : s.placementInterested === false ? (
                       <Badge variant="neutral" dot>Not Interested</Badge>
                     ) : (
-                      <span className="text-[14px] text-neutral-400">—</span>
+                      <span className="text-[14px] text-neutral-500">—</span>
                     ),
                 },
                 {
@@ -436,7 +434,7 @@ export default function StudentsPage() {
                         aria-haspopup="true"
                         aria-expanded={menu?.student.id === s.id}
                         onClick={(e) => openMenu(e, s)}
-                        className="p-1.5 -my-1 rounded-[8px] text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors"
+                        className="p-1.5 -my-1 rounded-[8px] text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors"
                       >
                         <MoreVertical size={17} />
                       </button>
@@ -480,7 +478,7 @@ export default function StudentsPage() {
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 my-0.5 text-[14px] text-left text-neutral-700 hover:bg-neutral-100/60 transition-colors rounded-[8px]"
             >
-              <Pencil size={14} className="shrink-0 text-neutral-400" />
+              <Pencil size={14} className="shrink-0 text-neutral-500" />
               Edit Profile
             </button>
           </div>
@@ -558,7 +556,7 @@ export default function StudentsPage() {
         >
           <div className="space-y-6">
             <div>
-              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-3">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-neutral-500 mb-3">
                 Profile
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -589,7 +587,7 @@ export default function StudentsPage() {
               </div>
             </div>
             <div className="border-t border-neutral-100/80 pt-5">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-3">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-neutral-500 mb-3">
                 Academics
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -646,6 +644,5 @@ export default function StudentsPage() {
           </div>
         </Modal>
       </PageContainer>
-    </div>
   );
 }

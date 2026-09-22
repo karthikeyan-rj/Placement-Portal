@@ -225,8 +225,7 @@ export default function ReportsPage() {
   ];
 
   return (
-    <div className="bg-background min-h-screen">
-      <PageContainer className="py-8">
+    <PageContainer>
         <PageHeader
           title="Reports"
           description="Placement performance and recruitment insights."
@@ -418,7 +417,6 @@ export default function ReportsPage() {
           </>
         )}
       </PageContainer>
-    </div>
   );
 }
 
@@ -496,7 +494,7 @@ function PlacementDonut({
             <span className="text-[13px] font-semibold text-neutral-900 tabular-nums">
               {prettyNumber(seg.count)}
             </span>
-            <span className="text-[12px] text-neutral-400 tabular-nums">
+            <span className="text-[12px] text-neutral-500 tabular-nums">
               {total ? Math.round((seg.count / total) * 1000) / 10 : 0}%
             </span>
           </div>

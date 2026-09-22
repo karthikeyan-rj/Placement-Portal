@@ -126,23 +126,23 @@ export default function DrivesPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="glass rounded-[14px] shadow-soft p-5 space-y-3.5 animate-pulse">
+            <div key={i} className="bg-white rounded-[14px] border border-neutral-200/80 shadow-soft p-4 space-y-3 animate-pulse">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-[10px] bg-neutral-200/60" />
+                <div className="w-9 h-9 rounded-[9px] bg-neutral-100" />
                 <div className="space-y-1.5 flex-1">
-                  <div className="h-3.5 bg-neutral-200/60 rounded-full w-2/3" />
-                  <div className="h-2.5 bg-neutral-200/60 rounded-full w-1/2" />
+                  <div className="h-3.5 bg-neutral-100 rounded-full w-2/3" />
+                  <div className="h-2.5 bg-neutral-100 rounded-full w-1/2" />
                 </div>
               </div>
-              <div className="h-5 bg-neutral-200/60 rounded-full w-1/3" />
+              <div className="h-5 bg-neutral-100 rounded-full w-1/3" />
               <div className="space-y-1.5">
-                <div className="h-2.5 bg-neutral-200/60 rounded-full w-3/4" />
-                <div className="h-2.5 bg-neutral-200/60 rounded-full w-1/2" />
+                <div className="h-2.5 bg-neutral-100 rounded-full w-3/4" />
+                <div className="h-2.5 bg-neutral-100 rounded-full w-1/2" />
               </div>
-              <div className="border-t border-white/40 pt-3">
+              <div className="border-t border-neutral-100 pt-3">
                 <div className="flex gap-1.5">
-                  <div className="h-5 bg-neutral-200/60 rounded-full w-16" />
-                  <div className="h-5 bg-neutral-200/60 rounded-full w-20" />
+                  <div className="h-5 bg-neutral-100 rounded-full w-16" />
+                  <div className="h-5 bg-neutral-100 rounded-full w-20" />
                 </div>
               </div>
             </div>
@@ -166,11 +166,11 @@ export default function DrivesPage() {
             return (
               <div
                 key={drive.id}
-                className="glass rounded-[14px] shadow-soft p-5 flex flex-col hover:shadow-raised hover:-translate-y-0.5 transition-all duration-200 animate-fadeIn"
+                className="bg-white rounded-[14px] border border-neutral-200/80 shadow-soft p-4 flex flex-col hover:border-primary-200 hover:shadow-raised transition-colors duration-150 animate-fadeIn"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-[10px] bg-brand-navy flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-[9px] bg-brand-navy flex items-center justify-center shrink-0">
                       <Building2 size={16} className="text-white" />
                     </div>
                     <div className="min-w-0">
@@ -197,21 +197,21 @@ export default function DrivesPage() {
                 )}
 
                 {drive.jobDescription && (
-                  <p className="text-[15px] text-neutral-500 mb-3 line-clamp-2 leading-relaxed">
+                  <p className="text-[13.5px] text-neutral-500 mb-3 line-clamp-2 leading-relaxed">
                     {drive.jobDescription}
                   </p>
                 )}
 
-                <div className="space-y-1.5 text-[15px] text-neutral-500 mt-auto">
+                <div className="space-y-1.5 text-[13.5px] text-neutral-500 mt-auto">
                   {drive.driveDate && (
                     <div className="flex items-center gap-2">
-                      <Calendar size={13} className="text-neutral-400 shrink-0" />
+                      <Calendar size={13} className="text-neutral-500 shrink-0" />
                       <span>Drive: {fmt(drive.driveDate)}</span>
                     </div>
                   )}
                   {drive.registrationDeadline && (
                     <div className="flex items-center gap-2">
-                      <Clock size={13} className="text-neutral-400 shrink-0" />
+                      <Clock size={13} className="text-neutral-500 shrink-0" />
                       <span>
                         Apply by:{' '}
                         <span className={drive.status === 'REGISTRATION_OPEN' ? 'text-primary-600 font-medium' : ''}>
@@ -222,15 +222,15 @@ export default function DrivesPage() {
                   )}
                   {drive.location && (
                     <div className="flex items-center gap-2">
-                      <MapPin size={13} className="text-neutral-400 shrink-0" />
+                      <MapPin size={13} className="text-neutral-500 shrink-0" />
                       <span>{drive.location}</span>
                     </div>
                   )}
                 </div>
 
                 {hasCriteria(drive) && (
-                  <div className="mt-3 pt-3 border-t border-white/40">
-                    <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-2">
+                  <div className="mt-3 pt-3 border-t border-neutral-100">
+                    <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">
                       Eligibility
                     </p>
                     <div className="flex flex-wrap gap-1.5">
@@ -259,7 +259,7 @@ export default function DrivesPage() {
                 )}
 
                 {drive.status === 'REGISTRATION_OPEN' && (
-                  <div className="mt-3 pt-3 border-t border-white/40">
+                  <div className="mt-3 pt-3 border-t border-neutral-100">
                     <div className="flex items-center gap-2 text-[14px] text-primary-600 font-medium">
                       <span className="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse" />
                       Registration Open
@@ -268,7 +268,7 @@ export default function DrivesPage() {
                 )}
 
                 {drive.status === 'CANCELLED' && (
-                  <div className="mt-3 pt-3 border-t border-white/40">
+                  <div className="mt-3 pt-3 border-t border-neutral-100">
                     <div className="flex items-center gap-2 text-[14px] text-danger-600 font-medium">
                       <GraduationCap size={14} />
                       This drive has been cancelled by the placement office.

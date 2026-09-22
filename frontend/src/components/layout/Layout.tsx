@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useDevMode } from '../../context/DevModeContext';
+import { useNotifications } from '../../context/NotificationsContext';
 import { useEffectiveRole } from '../../hooks/useEffectiveRole';
 import { Avatar, Breadcrumb, type BreadcrumbSegment } from '../ui';
 import {
@@ -10,12 +11,14 @@ import {
   getBreadcrumbTitle,
   isGroupActive,
   isPathActive,
+  visibleGroups,
   type NavGroup,
   type NavItem,
 } from '../../config/navigation';
-import { Menu, X, ChevronDown, LogOut, User, Lock } from 'lucide-react';
+import { Menu, X, ChevronDown, LogOut, User, Lock, Mail } from 'lucide-react';
+import AccountMenu from './AccountMenu';
 
-const TOPBAR_H = 70;
+const TOPBAR_H = 64;
 
 function getBreadcrumbs(pathname: string): BreadcrumbSegment[] {
   const segments: BreadcrumbSegment[] = [{ label: 'Dashboard', path: '/dashboard' }];
@@ -27,7 +30,7 @@ function getBreadcrumbs(pathname: string): BreadcrumbSegment[] {
 
 function NavUnderline() {
   return (
-    <span className="absolute left-1/2 bottom-[3px] -translate-x-1/2 h-[3px] w-5 rounded-full bg-primary-500" />
+    <span className="absolute left-1/2 bottom-[1px] -translate-x-1/2 h-[2px] w-4 rounded-full bg-primary-500" />
   );
 }
 
@@ -100,9 +103,9 @@ function GroupDropdown({ group, pathname, open, active, onToggle, onClose, onNav
         onKeyDown={handleTriggerKey}
         aria-haspopup="true"
         aria-expanded={open}
-        className={`relative h-[40px] px-3.5 rounded-[10px] text-[14px] font-medium flex items-center gap-1.5 transition-all duration-150 ${
+        className={`relative h-[36px] px-3 rounded-[8px] text-[13.5px] font-medium flex items-center gap-1.5 transition-all duration-150 ${
           active || open
-            ? 'text-primary-700 bg-primary-50/70'
+            ? 'text-primary-700 bg-primary-50/60'
             : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/70'
         }`}
       >
@@ -110,7 +113,7 @@ function GroupDropdown({ group, pathname, open, active, onToggle, onClose, onNav
         <ChevronDown
           size={15}
           className={`transition-transform duration-150 ${open ? 'rotate-180' : ''} ${
-            active || open ? 'text-primary-500' : 'text-neutral-400'
+            active || open ? 'text-primary-500' : 'text-neutral-500'
           }`}
         />
         {(active || open) && <NavUnderline />}
@@ -118,33 +121,46 @@ function GroupDropdown({ group, pathname, open, active, onToggle, onClose, onNav
 
       {open && (
         <div
-          className="absolute left-0 top-full mt-2 z-50 w-60 glass-strong rounded-[14px] border border-white/40 shadow-overlay py-1.5 animate-slideDown"
+          className="absolute left-0 top-full mt-2 z-50 w-60 min-w-[240px] glass-strong rounded-[14px] border border-white/40 shadow-overlay py-1.5 animate-slideDown"
           role="menu"
           aria-label={group.label}
         >
           {group.items.map((item, index) => {
             const itemActive = isPathActive(pathname, item);
+            const prev = index > 0 ? group.items[index - 1] : undefined;
+            const showSection = !!item.section && index > 0 && item.section !== prev?.section;
             return (
-              <button
-                key={item.path}
-                ref={(el) => {
-                  itemRefs.current[index] = el;
-                }}
-                type="button"
-                role="menuitem"
-                onClick={() => onNavigate(item.path)}
-                onKeyDown={(e) => handleItemKey(e, index)}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 my-0.5 text-[14px] text-left rounded-[10px] transition-colors outline-none ${
-                  itemActive
-                    ? 'bg-primary-50/80 text-primary-700 font-medium'
-                    : 'text-neutral-700 hover:bg-neutral-100/70 hover:text-neutral-900'
-                }`}
-              >
-                <span className={`shrink-0 ${itemActive ? 'text-primary-500' : 'text-neutral-400'}`}>
-                  <item.icon size={17} />
-                </span>
-                {item.label}
-              </button>
+              <div key={item.path}>
+                {showSection && (
+                  <p className="px-3.5 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                    {item.section}
+                  </p>
+                )}
+                <button
+                  ref={(el) => {
+                    itemRefs.current[index] = el;
+                  }}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => onNavigate(item.path)}
+                  onKeyDown={(e) => handleItemKey(e, index)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2 my-0.5 text-[13.5px] text-left rounded-[9px] transition-colors outline-none ${
+                    itemActive
+                      ? 'bg-primary-50/80 text-primary-700 font-medium'
+                      : 'text-neutral-700 hover:bg-neutral-100/70 hover:text-neutral-900'
+                  }`}
+                >
+                  <span className={`shrink-0 ${itemActive ? 'text-primary-500' : 'text-neutral-500'}`}>
+                    <item.icon size={16} />
+                  </span>
+                  <span className="flex flex-col min-w-0">
+                    <span className="truncate">{item.label}</span>
+                    {item.description && (
+                      <span className="text-[11.5px] text-neutral-400 truncate">{item.description}</span>
+                    )}
+                  </span>
+                </button>
+              </div>
             );
           })}
         </div>
@@ -164,8 +180,8 @@ function SingleLink({ item, active, onNavigate }: SingleLinkProps) {
     <button
       type="button"
       onClick={() => onNavigate(item.path)}
-      className={`relative h-[40px] px-3.5 rounded-[10px] text-[14px] font-medium flex items-center transition-all duration-150 ${
-        active ? 'text-primary-700 bg-primary-50/70' : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/70'
+      className={`relative h-[36px] px-3 rounded-[8px] text-[13.5px] font-medium flex items-center transition-all duration-150 ${
+        active ? 'text-primary-700 bg-primary-50/60' : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/70'
       }`}
     >
       {item.label}
@@ -177,6 +193,7 @@ function SingleLink({ item, active, onNavigate }: SingleLinkProps) {
 export default function Layout() {
   const { user, logout } = useAuth();
   const { isPreviewing, exitPreview } = useDevMode();
+  const { unreadCount } = useNotifications();
   const effectiveRole = useEffectiveRole();
   const navigate = useNavigate();
   const location = useLocation();
@@ -184,15 +201,17 @@ export default function Layout() {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileCollapsed, setMobileCollapsed] = useState<Record<string, boolean>>({});
+  const [collapse, setCollapse] = useState(0);
 
   const topNavRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   const role = (effectiveRole || 'STUDENT') as keyof typeof NAV_GROUPS;
-  const groups = NAV_GROUPS[role] || [];
+  const groups = visibleGroups(NAV_GROUPS[role] || []);
   const breadcrumbs = getBreadcrumbs(location.pathname);
   const displayName = user?.name || (isPreviewing ? 'Preview' : 'User');
-  const isStudent = role === 'STUDENT';
 
   const closeMenus = () => {
     setOpenGroup(null);
@@ -258,6 +277,40 @@ export default function Layout() {
     }
   }, [mobileOpen]);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const init: Record<string, boolean> = {};
+    for (const group of groups) {
+      if (!isGroupActive(location.pathname, group)) init[group.label] = true;
+    }
+    setMobileCollapsed(init);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileOpen]);
+
+  useLayoutEffect(() => {
+    const el = topNavRef.current;
+    if (!el) return;
+    const check = () => {
+      const over = el.scrollWidth > el.clientWidth + 2;
+      const roomy = el.scrollWidth <= el.clientWidth - 48;
+      setCollapse((c) => {
+        const maxC = Math.max(0, groups.length - 1);
+        if (over && c < maxC) return c + 1;
+        if (roomy && c > 0) return 0;
+        return c;
+      });
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    window.addEventListener('resize', check);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', check);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups.length]);
+
   const brand = (
     <div className="flex items-center gap-3 min-w-0">
       <div className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-gradient-to-br from-primary-500 to-primary-700 text-white font-bold text-[14px] shrink-0 shadow-soft">
@@ -290,18 +343,53 @@ export default function Layout() {
       />
     );
 
-  const desktopNav = (
-    <nav ref={topNavRef} aria-label="Primary" className="hidden lg:flex items-center gap-1 ml-8">
-      {groups.map(renderGroup)}
-    </nav>
+  const fit = Math.max(1, groups.length - collapse);
+  const primaryGroups = groups.slice(0, fit);
+  const moreGroups = groups.slice(fit);
+  const moreItems: NavItem[] = moreGroups.flatMap((g) =>
+    g.items.map((i) => ({
+      ...i,
+      section: g.items.length > 1 ? i.section ?? g.label : i.section,
+    })),
   );
+  const moreActive = moreItems.some((i) => isPathActive(location.pathname, i));
+
+  const desktopNav =
+    groups.length > 0 && (
+      <nav
+        ref={topNavRef}
+        aria-label="Primary"
+        className="hidden lg:flex items-center gap-0.5 ml-6 min-w-0"
+      >
+        {primaryGroups.map(renderGroup)}
+        {moreGroups.length > 0 && (
+          <GroupDropdown
+            group={{ label: 'More', items: moreItems }}
+            pathname={location.pathname}
+            open={openGroup === 'More'}
+            active={moreActive}
+            onToggle={() => setOpenGroup(openGroup === 'More' ? null : 'More')}
+            onClose={() => setOpenGroup(null)}
+            onNavigate={handleNavigate}
+          />
+        )}
+      </nav>
+    );
 
   const profileMenuButton = (
     <button
+      ref={profileButtonRef}
       type="button"
       onClick={() => {
         setProfileOpen((prev) => !prev);
         setOpenGroup(null);
+      }}
+      onKeyDown={(e) => {
+        if (!profileOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+          e.preventDefault();
+          setProfileOpen(true);
+          setOpenGroup(null);
+        }
       }}
       aria-haspopup="true"
       aria-expanded={profileOpen}
@@ -309,64 +397,37 @@ export default function Layout() {
         profileOpen ? 'bg-neutral-100/80' : 'hover:bg-neutral-100/70'
       }`}
     >
-      <Avatar name={displayName} size="sm" />
+      <span className="relative">
+        <Avatar name={displayName} size="sm" />
+      </span>
       <div className="hidden sm:block text-left">
         <p className="text-[14px] font-semibold text-neutral-900 leading-tight max-w-[160px] truncate">{displayName}</p>
-        <p className="text-[12px] text-neutral-400 leading-tight mt-0.5">{roleLabels[role]}</p>
+        <p className="text-[12px] text-neutral-500 leading-tight mt-0.5">{roleLabels[role]}</p>
       </div>
       <ChevronDown
         size={15}
-        className={`hidden sm:block text-neutral-400 transition-transform duration-150 ${profileOpen ? 'rotate-180' : ''}`}
+        className={`hidden sm:block text-neutral-500 transition-transform duration-150 ${profileOpen ? 'rotate-180' : ''}`}
       />
     </button>
   );
 
   const profileMenu = (
-    <div
-      className="absolute right-0 top-full mt-2 z-50 w-60 glass-strong rounded-[14px] border border-white/40 shadow-overlay py-1.5 animate-slideDown"
-      role="menu"
-    >
-      <div className="px-3.5 py-2.5 border-b border-neutral-100/60 mb-1">
-        <p className="text-[14px] font-semibold text-neutral-900 truncate">{displayName}</p>
-        <p className="text-[12px] text-neutral-400 truncate mt-0.5">{user?.email || roleLabels[role]}</p>
-      </div>
-      {isStudent && (
-        <>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => handleNavigate('/profile')}
-            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 my-0.5 text-[14px] text-left rounded-[10px] text-neutral-700 hover:bg-neutral-100/70 transition-colors"
-          >
-            <User size={15} className="text-neutral-400 shrink-0" />
-            My Profile
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              closeMenus();
-              navigate('/profile', { state: { security: true } });
-            }}
-            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 my-0.5 text-[14px] text-left rounded-[10px] text-neutral-700 hover:bg-neutral-100/70 transition-colors"
-          >
-            <Lock size={15} className="text-neutral-400 shrink-0" />
-            Change Password / Security
-          </button>
-        </>
-      )}
-      <div className="border-t border-neutral-100/60 mt-1 pt-1">
-        <button
-          type="button"
-          role="menuitem"
-          onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 my-0.5 text-[14px] text-left rounded-[10px] text-danger-600 hover:bg-danger-50/60 transition-colors"
-        >
-          <LogOut size={15} className="shrink-0" />
-          Logout
-        </button>
-      </div>
-    </div>
+    <AccountMenu
+      displayName={displayName}
+      email={user?.email}
+      roleLabel={roleLabels[role]}
+      onClose={() => {
+        setProfileOpen(false);
+        profileButtonRef.current?.focus();
+      }}
+      onMyProfile={() => handleNavigate('/profile')}
+      onChangePassword={() => {
+        closeMenus();
+        navigate('/profile', { state: { security: true } });
+      }}
+      onLogout={handleLogout}
+      triggerRef={profileButtonRef}
+    />
   );
 
   const mobileMenu = mobileOpen && (
@@ -381,7 +442,7 @@ export default function Layout() {
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
-            className="p-2 -mr-1 rounded-[10px] text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors"
+            className="p-2 -mr-1 rounded-[10px] text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100/80 transition-colors"
             aria-label="Close menu"
           >
             <X size={20} />
@@ -391,48 +452,115 @@ export default function Layout() {
         <nav aria-label="Primary" className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
           {groups.map((group) => {
             const groupActive = isGroupActive(location.pathname, group);
-            return (
-              <div key={group.label} className="mb-5">
-                <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                  {group.label}
-                </p>
-                <div className="space-y-0.5">
-                  {group.items.map((item) => {
-                    const itemActive = isPathActive(location.pathname, item);
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.path}
-                        type="button"
-                        onClick={() => handleNavigate(item.path)}
-                        className={`w-full flex items-center gap-3 h-11 px-3.5 rounded-[10px] text-[14px] font-medium transition-colors ${
-                          groupActive && itemActive
-                            ? 'bg-primary-50/80 text-primary-700'
-                            : 'text-neutral-700 hover:bg-neutral-100/70'
-                        }`}
-                      >
-                        <Icon size={17} className={groupActive && itemActive ? 'text-primary-500' : 'text-neutral-400'} />
-                        {item.label}
-                      </button>
-                    );
-                  })}
+            if (group.items.length === 1) {
+              const item = group.items[0];
+              const itemActive = isPathActive(location.pathname, item);
+              return (
+                <div key={group.label} className="mb-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate(item.path)}
+                    className={`w-full flex items-center gap-3 h-11 px-3.5 rounded-[10px] text-[14px] font-medium transition-colors ${
+                      itemActive ? 'bg-primary-50/80 text-primary-700' : 'text-neutral-700 hover:bg-neutral-100/70'
+                    }`}
+                  >
+                    <item.icon size={17} className={itemActive ? 'text-primary-500' : 'text-neutral-500'} />
+                    {item.label}
+                  </button>
                 </div>
+              );
+            }
+            const collapsed = !!mobileCollapsed[group.label];
+            return (
+              <div key={group.label} className="mb-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMobileCollapsed((prev) => ({ ...prev, [group.label]: !prev[group.label] }))}
+                  aria-expanded={!collapsed}
+                  className="w-full flex items-center justify-between h-11 px-3.5 rounded-[10px] text-[14px] font-semibold text-neutral-700 hover:bg-neutral-100/70 transition-colors"
+                >
+                  <span className={`${groupActive ? 'text-primary-700' : ''}`}>{group.label}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`text-neutral-400 transition-transform duration-150 ${collapsed ? '-rotate-90' : ''}`}
+                  />
+                </button>
+                {!collapsed && (
+                  <div className="space-y-0.5 mt-0.5 ml-3 pl-3 border-l border-neutral-200/70" role="group" aria-label={group.label}>
+                    {group.items.map((item) => {
+                      const itemActive = isPathActive(location.pathname, item);
+                      return (
+                        <button
+                          key={item.path}
+                          type="button"
+                          onClick={() => handleNavigate(item.path)}
+                          className={`w-full flex items-center gap-3 h-10 px-3.5 rounded-[10px] text-[14px] font-medium transition-colors ${
+                            groupActive && itemActive
+                              ? 'bg-primary-50/80 text-primary-700'
+                              : 'text-neutral-700 hover:bg-neutral-100/70'
+                          }`}
+                        >
+                          <item.icon size={16} className={groupActive && itemActive ? 'text-primary-500' : 'text-neutral-500'} />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
         </nav>
 
         <div className="border-t border-neutral-200/60 px-3 py-3 shrink-0">
-          <div className="flex items-center gap-3 px-2 py-1.5">
+          <button
+            type="button"
+            onClick={() => handleNavigate('/messages')}
+            className="w-full relative flex items-center gap-3 h-11 px-3.5 rounded-[10px] text-[14px] font-medium text-neutral-700 hover:bg-neutral-100/70 transition-colors"
+          >
+            <span className="relative">
+              <Mail size={17} className="text-neutral-500" />
+              {unreadCount > 0 && (
+                <span className="absolute top-0 -right-1 h-2 w-2 rounded-full bg-danger-500 ring-2 ring-white" />
+              )}
+            </span>
+            Messages
+            {unreadCount > 0 && (
+              <span className="ml-auto h-5 min-w-5 px-1.5 rounded-full bg-danger-500 text-[11px] font-semibold text-white flex items-center justify-center">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNavigate('/profile')}
+            className="w-full flex items-center gap-3 h-11 px-3.5 rounded-[10px] text-[14px] font-medium text-neutral-700 hover:bg-neutral-100/70 transition-colors"
+          >
+            <User size={17} className="text-neutral-500" />
+            My Profile
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              closeMenus();
+              setMobileOpen(false);
+              navigate('/profile', { state: { security: true } });
+            }}
+            className="w-full flex items-center gap-3 h-11 px-3.5 rounded-[10px] text-[14px] font-medium text-neutral-700 hover:bg-neutral-100/70 transition-colors"
+          >
+            <Lock size={17} className="text-neutral-500" />
+            Change Password
+          </button>
+          <div className="flex items-center gap-3 px-2 py-1.5 mt-1 border-t border-neutral-200/60 pt-3">
             <Avatar name={displayName} size="sm" />
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-semibold text-neutral-900 truncate leading-tight">{displayName}</p>
-              <p className="text-[12px] text-neutral-400 leading-tight mt-0.5">{roleLabels[role]}</p>
+              <p className="text-[12px] text-neutral-500 leading-tight mt-0.5">{roleLabels[role]}</p>
             </div>
             <button
               type="button"
               onClick={handleLogout}
-              className="p-2.5 rounded-[10px] text-neutral-400 hover:text-danger-600 hover:bg-danger-50/60 transition-colors"
+              className="p-2.5 rounded-[10px] text-neutral-500 hover:text-danger-600 hover:bg-danger-50/60 transition-colors"
               title="Sign out"
               aria-label="Sign out"
             >
@@ -450,24 +578,39 @@ export default function Layout() {
         className="sticky top-0 z-40 shrink-0 border-b border-neutral-200/70 bg-white/85 backdrop-blur-md shadow-soft"
         style={{ height: TOPBAR_H }}
       >
-        <div className="mx-auto w-full max-w-[1500px] h-full flex items-center justify-between px-4 sm:px-6 lg:px-8 gap-4">
+        <div className="mx-auto w-full max-w-[1560px] h-full flex items-center justify-between px-4 sm:px-6 lg:px-10 gap-4">
           <div className="flex items-center min-w-0">{brand}</div>
 
           {desktopNav}
 
           <div className="flex items-center gap-1 shrink-0">
             {isPreviewing && (
-              <span className="hidden sm:inline-flex rounded-full bg-accent-50 text-accent-500 px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ring-accent-300/30 mr-1">
+              <span className="hidden sm:inline-flex rounded-full bg-accent-50 text-accent-600 px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ring-accent-300/30 mr-1">
                 Preview
               </span>
             )}
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden p-2.5 rounded-[10px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors"
+              className="lg:hidden flex items-center justify-center h-9 w-9 rounded-[8px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors"
               aria-label="Open menu"
             >
               <Menu size={21} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNavigate('/messages')}
+              aria-label={unreadCount > 0 ? `Messages, ${unreadCount} unread` : 'Messages'}
+              title="Messages"
+              className="relative flex items-center justify-center h-9 w-9 rounded-[8px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors"
+            >
+              <Mail size={20} />
+              {unreadCount > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-danger-500 ring-2 ring-white"
+                />
+              )}
             </button>
             <div ref={profileRef} className="relative">
               {profileMenuButton}
@@ -479,17 +622,11 @@ export default function Layout() {
 
       {mobileMenu}
 
-      <nav
-        aria-label="Breadcrumb"
-        className="shrink-0 border-b border-neutral-200/60 bg-white/60 backdrop-blur-sm px-4 sm:px-6 lg:px-8"
-      >
-        <div className="mx-auto w-full max-w-[1500px] py-2.5">
-          <Breadcrumb segments={breadcrumbs} />
-        </div>
-      </nav>
-
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="mx-auto w-full max-w-[1500px] px-4 sm:px-6 lg:px-8 py-6 sm:py-8 relative z-10">
+        <div className="mx-auto w-full max-w-[1560px] px-4 sm:px-6 lg:px-10 py-5 sm:py-6 relative z-10">
+          <div className="mb-4">
+            <Breadcrumb segments={breadcrumbs} />
+          </div>
           <Outlet />
         </div>
       </main>

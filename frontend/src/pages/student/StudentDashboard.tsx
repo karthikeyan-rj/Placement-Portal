@@ -171,14 +171,14 @@ export default function StudentDashboard() {
       )}
 
       {!profileLoading && profile && missing.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 rounded-[14px] border border-warning-600/20 bg-warning-50 shadow-soft">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 rounded-[14px] border border-warning-600/20 bg-warning-50 shadow-soft">
           <div className="flex items-center gap-3">
-            <span className="shrink-0 flex items-center justify-center w-9 h-9 rounded-[10px] bg-warning-500/10 text-warning-600">
-              <AlertCircle size={18} />
+            <span className="shrink-0 flex items-center justify-center w-9 h-9 rounded-[9px] bg-warning-500/10 text-warning-600">
+              <AlertCircle size={17} />
             </span>
             <div>
-              <p className="text-[14px] font-semibold text-warning-700">Complete your profile</p>
-              <p className="text-[13px] text-warning-700/80 mt-0.5 max-w-xl">
+              <p className="text-[13.5px] font-semibold text-warning-700">Complete your profile</p>
+              <p className="text-[12.5px] text-warning-700/80 mt-0.5 max-w-xl">
                 {missing.length} {missing.length === 1 ? 'detail is' : 'details are'} still missing —
                 add {missing.slice(0, 3).join(', ')}
                 {missing.length > 3 ? ` and ${missing.length - 3} more` : ''} to stay eligible for drives.

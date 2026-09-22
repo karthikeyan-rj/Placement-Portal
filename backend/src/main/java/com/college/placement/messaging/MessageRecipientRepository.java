@@ -30,6 +30,8 @@ public interface MessageRecipientRepository extends JpaRepository<MessageRecipie
 
     long countByMessageIdAndReadAtIsNotNull(Long messageId);
 
+    long countByRecipientIdAndReadAtIsNull(Long recipientId);
+
     @Query("SELECT mr.message.id AS messageId, COUNT(mr) AS total, " +
             "COUNT(mr.deliveredAt) AS delivered, COUNT(mr.readAt) AS read " +
             "FROM MessageRecipient mr WHERE mr.message.id IN :ids GROUP BY mr.message.id")

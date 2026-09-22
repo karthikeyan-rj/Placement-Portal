@@ -73,7 +73,7 @@ export default function LoginPage() {
                 <div className={`flex h-10 w-56 items-center justify-center rounded-[10px] text-[13px] font-medium transition-colors ${
                   role.active
                     ? 'bg-white/10 text-white border border-white/10'
-                    : 'bg-white/5 text-white/50 border border-white/5'
+                    : 'bg-white/5 text-white/70 border border-white/5'
                 }`}>
                   {role.active ? (
                     <span className="flex items-center gap-2">

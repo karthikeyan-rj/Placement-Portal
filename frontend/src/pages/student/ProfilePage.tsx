@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { studentApi, authApi } from '../../api/api';
+import { studentApi, profileApi } from '../../api/api';
 import { getErrorMessage } from '../../api/axios';
-import type { StudentProfile } from '../../types';
+import { useEffectiveRole } from '../../hooks/useEffectiveRole';
+import { roleLabels } from '../../config/navigation';
+import type { StudentProfile, ProfileResponse } from '../../types';
+import ChangePasswordCard from '../../components/profile/ChangePasswordCard';
 import {
   Button,
   Input,
@@ -19,13 +22,11 @@ import {
   GraduationCap,
   Briefcase,
   Shield,
-  Lock,
   Calendar,
   Building2,
   ExternalLink,
   CheckCircle2,
   BarChart3,
-  Eye,
   AlertCircle,
   User,
   Phone,
@@ -120,7 +121,7 @@ function TextValue({ value }: { value: ReactNode }) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11.5px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">{label}</p>
+      <p className="text-[11.5px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">{label}</p>
       <div className="min-h-[20px] break-words">{children ?? <TextValue value={null} />}</div>
     </div>
   );
@@ -140,10 +141,10 @@ function SectionCard({
   className?: string;
 }) {
   return (
-    <div className={`glass rounded-[16px] border border-white/40 shadow-card p-5 sm:p-6 ${className}`}>
-      <div className="flex items-center justify-between gap-3 mb-4">
+    <div className={`bg-white rounded-[14px] border border-neutral-200/80 shadow-soft p-4 sm:p-5 ${className}`}>
+      <div className="flex items-center justify-between gap-3 mb-3.5">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="shrink-0 flex items-center justify-center w-9 h-9 rounded-[10px] bg-primary-50 text-primary-500">
+          <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-[9px] bg-primary-50 text-primary-500">
             {icon}
           </span>
           <h3 className="text-[15px] font-semibold text-neutral-900 truncate">{title}</h3>
@@ -160,7 +161,7 @@ function LinkCard({ label, url }: { label: string; url: string | null }) {
   return (
     <div className="flex items-center justify-between gap-3 p-3.5 rounded-[12px] bg-neutral-50/60 border border-neutral-100 hover:border-primary-200/60 transition-colors">
       <div className="min-w-0">
-        <p className="text-[11.5px] font-semibold uppercase tracking-wider text-neutral-400 mb-0.5">{label}</p>
+        <p className="text-[11.5px] font-semibold uppercase tracking-wider text-neutral-500 mb-0.5">{label}</p>
         {valid ? (
           <a
             href={valid}
@@ -172,7 +173,7 @@ function LinkCard({ label, url }: { label: string; url: string | null }) {
             <ExternalLink size={12} className="shrink-0" />
           </a>
         ) : url ? (
-          <p className="text-[13.5px] text-neutral-400 break-all" title={`${url} is not a valid http(s) link`}>
+          <p className="text-[13.5px] text-neutral-500 break-all" title={`${url} is not a valid http(s) link`}>
             {url.length > 42 ? `${url.slice(0, 42)}…` : url}
           </p>
         ) : (
@@ -192,7 +193,7 @@ function ProfileTabs({ active, onChange }: { active: Tab; onChange: (t: Tab) => 
             key={tab.key}
             type="button"
             onClick={() => onChange(tab.key)}
-            className={`px-4 py-2.5 -mb-px border-b-2 text-[14px] font-medium whitespace-nowrap transition-all duration-150 ${
+            className={`px-3.5 py-2 -mb-px border-b-2 text-[13.5px] font-medium whitespace-nowrap transition-all duration-150 ${
               active === tab.key
                 ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
@@ -232,18 +233,17 @@ interface ProfessionalFormState {
   portfolioUrl: string;
 }
 
-interface PasswordForm {
-  current: string;
-  next: string;
-  confirm: string;
-}
-
 export default function ProfilePage() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [account, setAccount] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const location = useLocation();
+
+  const role = useEffectiveRole();
+  const isPR = role === 'PR';
+  const canEdit = !isPR;
 
   const [editOpen, setEditOpen] = useState(false);
   const [editTab, setEditTab] = useState<EditTab>('personal');
@@ -253,12 +253,6 @@ export default function ProfilePage() {
   const [academicForm, setAcademicForm] = useState<AcademicFormState>({ tenthPercentage: '', twelfthPercentage: '', diplomaPercentage: '', cgpa: '', activeBacklogs: '', historyOfBacklogs: '' });
   const [professionalForm, setProfessionalForm] = useState<ProfessionalFormState>({ skills: '', certifications: '', projects: '', resumeUrl: '', githubUrl: '', linkedinUrl: '', portfolioUrl: '' });
   const [interested, setInterested] = useState(true);
-
-  const [pw, setPw] = useState<PasswordForm>({ current: '', next: '', confirm: '' });
-  const [savingPassword, setSavingPassword] = useState(false);
-  const [pwError, setPwError] = useState<string | null>(null);
-  const [pwSuccess, setPwSuccess] = useState(false);
-  const [showNew, setShowNew] = useState(false);
 
   useEffect(() => {
     const state = location.state as { security?: boolean } | null;
@@ -272,9 +266,10 @@ export default function ProfilePage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await studentApi.getMyProfile();
-      const data: StudentProfile = res.data?.data ?? res.data;
-      setProfile(data);
+      const res = await profileApi.getMyProfile();
+      const data: ProfileResponse = res.data?.data ?? res.data;
+      setAccount(data);
+      setProfile(data?.studentProfile ?? null);
     } catch (e) {
       setError(getErrorMessage(e) || 'Failed to load profile');
     } finally {
@@ -310,8 +305,6 @@ export default function ProfilePage() {
       portfolioUrl: profile.portfolioUrl || '',
     });
     setInterested(profile.placementInterested ?? true);
-    setPwError(null);
-    setPwSuccess(false);
     setEditTab(tab);
     setEditOpen(true);
   };
@@ -403,46 +396,55 @@ export default function ProfilePage() {
     return savePlacement();
   };
 
-  const submitPassword = async () => {
-    setPwError(null);
-    if (!pw.current) { setPwError('Current password is required.'); return; }
-    if (!pw.next) { setPwError('New password is required.'); return; }
-    if (pw.next.length < 6) { setPwError('New password must be at least 6 characters.'); return; }
-    if (pw.next !== pw.confirm) { setPwError('New passwords do not match.'); return; }
-    setSavingPassword(true);
-    try {
-      await authApi.changePassword(pw.current, pw.next);
-      notify.success('Password changed successfully.');
-      setPwSuccess(true);
-      setPw({ current: '', next: '', confirm: '' });
-    } catch (e) {
-      const msg = getErrorMessage(e);
-      setPwError(msg === 'Validation failed' ? 'New password must be at least 6 characters.' : (msg || 'Failed to change password.'));
-    } finally {
-      setSavingPassword(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="max-w-[1200px] mx-auto space-y-6 animate-fadeIn">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-[150px] w-full rounded-[20px]" />
-        <Skeleton className="h-[240px] w-full rounded-[20px]" />
-        <Skeleton className="h-[320px] w-full rounded-[20px]" />
+        <Skeleton className="h-[150px] w-full rounded-[16px]" />
+        <Skeleton className="h-[240px] w-full rounded-[16px]" />
+        <Skeleton className="h-[320px] w-full rounded-[16px]" />
       </div>
     );
   }
 
-  if (error || !profile) {
+  if (error) {
     return (
       <div className="max-w-[1200px] mx-auto">
         <PageHeader title="My Profile" description="Manage your academic, professional and placement information." />
-        <div className="glass rounded-[20px] border border-white/40 shadow-card p-12 text-center animate-fadeIn">
+        <div className="bg-white rounded-[16px] border border-neutral-200/80 shadow-soft p-10 text-center animate-fadeIn">
           <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-danger-50 text-danger-500 mb-3">
             <AlertCircle size={22} />
           </span>
-          <p className="text-[15px] text-neutral-500">{error || 'Unable to load profile'}</p>
+          <p className="text-[15px] text-neutral-500">{error}</p>
+          <Button variant="secondary" className="mt-4" onClick={fetchProfile}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="max-w-[1200px] mx-auto space-y-6">
+        <PageHeader title="My Profile" description="Your account and placement profile." />
+        {account && (
+          <div className="bg-white rounded-[16px] border border-neutral-200/80 shadow-soft p-5 animate-fadeIn">
+            <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+              <Avatar name={account.name} size="lg" />
+              <div className="min-w-0">
+                <h2 className="text-[20px] font-bold text-neutral-900">{account.name}</h2>
+                <p className="text-[13px] text-neutral-500 mt-0.5 break-all">{account.email}</p>
+                <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-600 text-xs font-medium">
+                  {roleLabels[isPR ? 'PR' : 'STUDENT']}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="bg-white rounded-[16px] border border-neutral-200/80 shadow-soft p-10 text-center animate-fadeIn">
+          <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-50 text-amber-500 mb-3">
+            <AlertCircle size={22} />
+          </span>
+          <p className="text-[15px] text-neutral-600">Student profile information is unavailable.</p>
           <Button variant="secondary" className="mt-4" onClick={fetchProfile}>Retry</Button>
         </div>
       </div>
@@ -456,17 +458,17 @@ export default function ProfilePage() {
       <PageHeader title="My Profile" description="Your complete placement profile in one place." />
 
       {/* Hero header */}
-      <div className="glass rounded-[20px] shadow-glass p-6 animate-fadeIn">
+      <div className="bg-white rounded-[16px] border border-neutral-200/80 shadow-soft p-5 animate-fadeIn">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5">
           <div className="flex items-center gap-4 sm:gap-5 min-w-0">
             <Avatar name={profile.userName} size="lg" />
             <div className="min-w-0">
               <h2 className="text-[20px] font-bold text-neutral-900">{profile.userName}</h2>
-              <p className="text-[13px] text-neutral-400 mt-0.5 font-mono tracking-wide break-all">
+              <p className="text-[13px] text-neutral-500 mt-0.5 font-mono tracking-wide break-all">
                 {profile.registerNumber} · {profile.departmentName}
               </p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-600 text-xs font-medium">Student</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-600 text-xs font-medium">{roleLabels[isPR ? 'PR' : 'STUDENT']}</span>
                 <Badge variant={placementBadgeVariant(profile.placementStatus)} dot size="sm">
                   {formatPlacementStatus(profile.placementStatus)}
                 </Badge>
@@ -477,9 +479,11 @@ export default function ProfilePage() {
             </div>
           </div>
           <div className="shrink-0">
-            <Button variant="secondary" onClick={() => openEdit('personal')} className="glass border-white/40 hover:bg-white/60 w-full sm:w-auto">
-              <Pencil size={14} /> Edit Profile
-            </Button>
+            {canEdit && (
+              <Button variant="secondary" onClick={() => openEdit('personal')} className="w-full sm:w-auto">
+                <Pencil size={14} /> Edit Profile
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -502,19 +506,19 @@ export default function ProfilePage() {
       )}
 
       {/* Tab bar */}
-      <div className="bg-white rounded-[20px] border border-neutral-200/60 shadow-card animate-fadeIn">
-        <div className="px-5 pt-3 sm:px-6">
+      <div className="bg-white rounded-[16px] border border-neutral-200/80 shadow-soft animate-fadeIn">
+        <div className="px-4 pt-3 sm:px-5">
           <ProfileTabs active={activeTab} onChange={setActiveTab} />
         </div>
 
-        <div className="p-5 sm:p-6">
+        <div className="p-4 sm:p-5">
           {/* ── OVERVIEW ── */}
           {activeTab === 'overview' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 animate-fadeIn">
               <SectionCard
                 title="Personal Information"
                 icon={<User size={17} />}
-                action={<Button variant="ghost" size="sm" onClick={() => openEdit('personal')}><Pencil size={12} /> Edit</Button>}
+                action={canEdit ? <Button variant="ghost" size="sm" onClick={() => openEdit('personal')}><Pencil size={12} /> Edit</Button> : undefined}
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                   <Field label="Email"><TextValue value={profile.userEmail} /></Field>
@@ -529,7 +533,7 @@ export default function ProfilePage() {
               <SectionCard
                 title="Academic Snapshot"
                 icon={<GraduationCap size={17} />}
-                action={<Button variant="ghost" size="sm" onClick={() => openEdit('academics')}><Pencil size={12} /> Edit</Button>}
+                action={canEdit ? <Button variant="ghost" size="sm" onClick={() => openEdit('academics')}><Pencil size={12} /> Edit</Button> : undefined}
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                   <Field label="Current CGPA"><TextValue value={profile.cgpa != null ? String(profile.cgpa) : null} /></Field>
@@ -541,7 +545,7 @@ export default function ProfilePage() {
               <SectionCard
                 title="Professional Links"
                 icon={<Briefcase size={17} />}
-                action={<Button variant="ghost" size="sm" onClick={() => openEdit('professional')}><Pencil size={12} /> Edit</Button>}
+                action={canEdit ? <Button variant="ghost" size="sm" onClick={() => openEdit('professional')}><Pencil size={12} /> Edit</Button> : undefined}
               >
                 <div className="space-y-2.5">
                   <LinkCard label="Resume" url={profile.resumeUrl} />
@@ -590,7 +594,7 @@ export default function ProfilePage() {
             <div className="space-y-4 sm:space-y-5 animate-fadeIn">
               <div className="flex items-center justify-between">
                 <h3 className="text-[16px] font-semibold text-neutral-900">Academic Details</h3>
-                <Button variant="ghost" size="sm" onClick={() => openEdit('academics')}><Pencil size={13} /> Edit</Button>
+                {canEdit && <Button variant="ghost" size="sm" onClick={() => openEdit('academics')}><Pencil size={13} /> Edit</Button>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
                 <SectionCard title="Performance" icon={<GraduationCap size={17} />}>
@@ -598,7 +602,7 @@ export default function ProfilePage() {
                     <span className="text-[30px] font-bold text-neutral-900 tracking-tight">
                       {profile.cgpa != null ? profile.cgpa : '—'}
                     </span>
-                    {profile.cgpa != null && <span className="text-[13px] text-neutral-400 font-medium">/ 10 CGPA</span>}
+                    {profile.cgpa != null && <span className="text-[13px] text-neutral-500 font-medium">/ 10 CGPA</span>}
                   </div>
                 </SectionCard>
                 <SectionCard title="Backlogs" icon={<BarChart3 size={17} />}>
@@ -638,7 +642,7 @@ export default function ProfilePage() {
             <div className="space-y-4 sm:space-y-5 animate-fadeIn">
               <div className="flex items-center justify-between">
                 <h3 className="text-[16px] font-semibold text-neutral-900">Professional Details</h3>
-                <Button variant="ghost" size="sm" onClick={() => openEdit('professional')}><Pencil size={13} /> Edit</Button>
+                {canEdit && <Button variant="ghost" size="sm" onClick={() => openEdit('professional')}><Pencil size={13} /> Edit</Button>}
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
                 <SectionCard title="Skills" icon={<CheckCircle2 size={17} />} className="lg:col-span-2">
@@ -673,7 +677,7 @@ export default function ProfilePage() {
             <div className="space-y-4 sm:space-y-5 animate-fadeIn">
               <div className="flex items-center justify-between">
                 <h3 className="text-[16px] font-semibold text-neutral-900">Placement</h3>
-                <Button variant="ghost" size="sm" onClick={() => openEdit('placement')}><Pencil size={13} /> Edit</Button>
+                {canEdit && <Button variant="ghost" size="sm" onClick={() => openEdit('placement')}><Pencil size={13} /> Edit</Button>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 <SectionCard title="Placement Interest" icon={<CheckCircle2 size={17} />}>
@@ -704,7 +708,7 @@ export default function ProfilePage() {
                   </SectionCard>
                 )}
               </div>
-              <p className="text-[13px] text-neutral-400">
+              <p className="text-[13px] text-neutral-500">
                 Placement status, placed company and package details are managed by the Placement Office and are read-only here.
               </p>
             </div>
@@ -721,66 +725,7 @@ export default function ProfilePage() {
                 Use a password of at least 6 characters that you do not reuse elsewhere. Your current password is required to make changes.
               </p>
 
-              <div className="glass rounded-[16px] border border-white/40 shadow-card p-5 sm:p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Lock size={15} className="text-neutral-400" />
-                  <h4 className="text-[15px] font-semibold text-neutral-900">Change Password</h4>
-                </div>
-
-                <div className="space-y-4">
-                  <Input
-                    label="Current Password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={pw.current}
-                    onChange={(e) => { setPw({ ...pw, current: e.target.value }); setPwSuccess(false); }}
-                    placeholder="Enter your current password"
-                  />
-                  <div className="relative">
-                    <Input
-                      label="New Password"
-                      type={showNew ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      value={pw.next}
-                      onChange={(e) => { setPw({ ...pw, next: e.target.value }); setPwSuccess(false); }}
-                      placeholder="At least 6 characters"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNew(!showNew)}
-                      className="absolute right-3 top-[38px] text-neutral-400 hover:text-neutral-600"
-                      aria-label={showNew ? 'Hide new password' : 'Show new password'}
-                    >
-                      <Eye size={16} />
-                    </button>
-                  </div>
-                  <Input
-                    label="Confirm New Password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={pw.confirm}
-                    onChange={(e) => { setPw({ ...pw, confirm: e.target.value }); setPwSuccess(false); }}
-                    placeholder="Re-enter your new password"
-                  />
-
-                  {pwError && (
-                    <div className="flex items-start gap-2 rounded-[10px] bg-danger-50 border border-danger-100 px-3.5 py-2.5">
-                      <AlertCircle size={15} className="text-danger-500 mt-0.5 shrink-0" />
-                      <p className="text-[13px] font-medium text-danger-600">{pwError}</p>
-                    </div>
-                  )}
-                  {pwSuccess && (
-                    <div className="flex items-start gap-2 rounded-[10px] bg-success-50 border border-success-100 px-3.5 py-2.5">
-                      <CheckCircle2 size={15} className="text-success-500 mt-0.5 shrink-0" />
-                      <p className="text-[13px] font-medium text-success-700">Password changed successfully.</p>
-                    </div>
-                  )}
-
-                  <Button onClick={submitPassword} loading={savingPassword} disabled={savingPassword} className="w-full sm:w-auto">
-                    <Lock size={14} /> Update Password
-                  </Button>
-                </div>
-              </div>
+              <ChangePasswordCard />
             </div>
           )}
         </div>
@@ -828,7 +773,7 @@ export default function ProfilePage() {
                 <Input label="Batch" placeholder="e.g. 2021-2025" value={personalForm.batch} onChange={(e) => setPersonalForm({ ...personalForm, batch: e.target.value })} />
                 <Input label="Section" placeholder="e.g. A" value={personalForm.section} onChange={(e) => setPersonalForm({ ...personalForm, section: e.target.value })} />
               </div>
-              <p className="text-[12.5px] text-neutral-400 flex items-center gap-1.5">
+              <p className="text-[12.5px] text-neutral-500 flex items-center gap-1.5">
                 <Info size={13} /> Your register number, email and department are assigned by the college and cannot be changed here.
               </p>
             </div>

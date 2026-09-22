@@ -23,14 +23,14 @@ function DepartmentRow({ department }: { department: Department }) {
   return (
     <Link
       to="/departments"
-      className="flex items-center gap-3 px-5 py-4 border-b border-neutral-100/60 last:border-0 hover:bg-neutral-50/60 transition-colors block"
+      className="flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/60 transition-colors block"
     >
-      <span className="shrink-0 flex items-center justify-center w-10 h-10 rounded-[10px] bg-brand-navy-50 text-brand-navy-700">
-        <Building2 size={18} />
+      <span className="shrink-0 flex items-center justify-center w-9 h-9 rounded-[9px] bg-brand-navy-50 text-brand-navy-700">
+        <Building2 size={17} />
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold text-neutral-900 truncate">{department.name}</p>
-        <p className="text-[13px] text-text-secondary mt-0.5 truncate">
+        <p className="text-[13.5px] font-semibold text-neutral-900 truncate">{department.name}</p>
+        <p className="text-[12.5px] text-text-secondary mt-0.5 truncate">
           {department.prLimit != null
             ? `PR limit ${department.prLimit}`
             : 'No PR limit configured'}

@@ -146,6 +146,11 @@ public class MongoMessagingStore implements MessagingStore {
     }
 
     @Override
+    public long countUnread(Long recipientUserId) {
+        return recipientRepository.countByRecipientUserIdAndReadAtIsNull(recipientUserId);
+    }
+
+    @Override
     public void setReaction(Long messageId, Long userId, MessageReactionType reaction) {
         mongoTemplate.updateFirst(
                 new Query(Criteria.where("messageId").is(messageId).and("recipientUserId").is(userId)),

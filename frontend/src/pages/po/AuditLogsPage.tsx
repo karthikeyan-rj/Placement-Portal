@@ -219,8 +219,7 @@ export default function AuditLogsPage() {
   const modalDetails = selected ? parseDetails(selected.details) : null;
 
   return (
-    <div className="bg-background min-h-screen">
-      <PageContainer className="py-8">
+    <PageContainer>
         <PageHeader
           title="Audit Logs"
           description="Review important administrative and placement activity."
@@ -265,7 +264,7 @@ export default function AuditLogsPage() {
         </FilterToolbar>
 
         {hasFilters && (
-          <p className="mb-4 text-[12.5px] text-neutral-400">
+          <p className="mb-4 text-[12.5px] text-neutral-500">
             Filters are applied client-side to the most recent {FILTER_SCOPE.toLocaleString()} audit
             events retrieved from the server.
           </p>
@@ -314,7 +313,7 @@ export default function AuditLogsPage() {
                         </span>
                       </span>
                     ) : (
-                      <span className="text-[13px] text-neutral-400">—</span>
+                      <span className="text-[13px] text-neutral-500">—</span>
                     ),
                 },
                 {
@@ -335,7 +334,7 @@ export default function AuditLogsPage() {
                         {log.entityType || '—'}
                       </p>
                       {log.entityId != null && (
-                        <p className="text-[12px] text-neutral-400">#{log.entityId}</p>
+                        <p className="text-[12px] text-neutral-500">#{log.entityId}</p>
                       )}
                     </div>
                   ),
@@ -449,14 +448,13 @@ export default function AuditLogsPage() {
           )}
         </Modal>
       </PageContainer>
-    </div>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[12px] font-semibold uppercase tracking-[0.05em] text-neutral-400 mb-1.5">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.05em] text-neutral-500 mb-1.5">
         {label}
       </p>
       {children}

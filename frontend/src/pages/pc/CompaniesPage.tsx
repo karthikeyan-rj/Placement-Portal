@@ -180,8 +180,7 @@ export default function CompaniesPage() {
   };
 
   return (
-    <div className="bg-background min-h-screen">
-      <PageContainer className="py-8">
+    <PageContainer>
         <PageHeader
           title="Companies"
           description="Manage organizations participating in campus placements."
@@ -195,7 +194,7 @@ export default function CompaniesPage() {
           }
         />
 
-        <div className="glass rounded-[14px] border border-white/40 p-4 mb-6">
+        <div className="bg-white rounded-[12px] border border-neutral-200/80 shadow-soft p-3.5 mb-4">
           <FilterToolbar
             search={
               <SearchInput
@@ -274,7 +273,7 @@ export default function CompaniesPage() {
                         <Avatar name={c.name || 'U'} size="sm" />
                         <div className="min-w-0">
                           <p className="text-[14.5px] font-medium text-neutral-900 truncate">{c.name}</p>
-                          <p className="text-[12.5px] text-neutral-400 truncate">
+                          <p className="text-[12.5px] text-neutral-500 truncate">
                             {c.website ? (
                               <span className="inline-flex items-center gap-1">
                                 <Globe size={11} />
@@ -431,7 +430,7 @@ export default function CompaniesPage() {
                       {viewTarget.website.replace(/^https?:\/\//, '')}
                     </a>
                   ) : (
-                    <span className="font-medium text-neutral-400">—</span>
+                    <span className="font-medium text-neutral-500">—</span>
                   )}
                 </div>
                 <div className="flex justify-between gap-6 px-4 py-2.5 text-[13.5px]">
@@ -462,6 +461,5 @@ export default function CompaniesPage() {
           loading={deactivating}
         />
       </PageContainer>
-    </div>
   );
 }

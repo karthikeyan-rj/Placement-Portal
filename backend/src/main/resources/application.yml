@@ -20,6 +20,11 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -36,6 +41,8 @@ logging:
 app:
   seed-bulk-demo-data: ${SEED_BULK_DEMO_DATA:false}
   seed-bulk-demo-cleanup: ${SEED_BULK_DEMO_CLEANUP:false}
+  preparation:
+    seed-enabled: ${SEED_PREPARATION_CONTENT:true}
   messaging:
     storage: ${APP_MESSAGING_STORAGE:mongo}
   mongodb:

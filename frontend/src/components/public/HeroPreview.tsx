@@ -29,7 +29,7 @@ export default function HeroPreview() {
               key={stat.label}
               className="rounded-[10px] border border-neutral-100/60 bg-white p-3"
             >
-              <div className="flex items-center gap-1.5 text-neutral-400">
+              <div className="flex items-center gap-1.5 text-neutral-500">
                 <stat.icon size={13} />
                 <span className="text-[11px] font-medium">{stat.label}</span>
               </div>
@@ -42,7 +42,7 @@ export default function HeroPreview() {
 
         {/* Latest drive */}
         <div className="mx-3 mb-3 rounded-[10px] border border-neutral-100/60 bg-primary-50/40 p-3">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">
             Latest Drive
           </div>
           <div className="mt-1.5 flex items-center gap-2">

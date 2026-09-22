@@ -55,13 +55,13 @@ function DetailItem({
   const missing = value === '—';
   return (
     <div className="rounded-[12px] border border-neutral-200/60 bg-neutral-50/50 px-4 py-3">
-      <div className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-neutral-400">
+      <div className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-neutral-500">
         <Icon size={13} />
         {label}
       </div>
       <p
         className={`mt-1 text-[15px] font-medium break-words ${
-          missing ? 'text-neutral-400' : 'text-neutral-800'
+          missing ? 'text-neutral-500' : 'text-neutral-800'
         }`}
       >
         {value}
@@ -102,7 +102,7 @@ function InterviewCard({
           </Badge>
           {interview.interviewDate && (
             <span className="inline-flex items-center gap-1 text-[12.5px] text-neutral-500">
-              <Calendar size={12} className="text-neutral-400" />
+              <Calendar size={12} className="text-neutral-500" />
               {fmtDate(interview.interviewDate)}
             </span>
           )}
@@ -197,15 +197,15 @@ export default function InterviewsPage() {
           {statCards.map(({ label, value, icon: Icon, iconBg }) => (
             <div
               key={label}
-              className="glass rounded-[14px] shadow-soft p-4 flex items-center gap-3"
+              className="bg-white rounded-[14px] border border-neutral-200/80 shadow-soft p-4 flex items-center gap-3"
             >
               <div
-                className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 ${iconBg}`}
+                className={`w-9 h-9 rounded-[9px] flex items-center justify-center shrink-0 ${iconBg}`}
               >
                 <Icon size={16} />
               </div>
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500">
                   {label}
                 </p>
                 <p className="text-[20px] font-bold text-neutral-900 leading-tight">
@@ -325,7 +325,7 @@ export default function InterviewsPage() {
 
             {selected.remarks ? (
               <div className="rounded-[12px] border border-neutral-200/60 bg-neutral-50/50 px-4 py-3">
-                <div className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-neutral-400">
+                <div className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-neutral-500">
                   <StickyNote size={13} />
                   Remarks
                 </div>

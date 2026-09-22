@@ -8,6 +8,7 @@ import {
 } from '../../api/api';
 import type { ClarificationThread, Department, Message, User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationsContext';
 import {
   Avatar,
   Badge,
@@ -186,6 +187,7 @@ function ProgressBar({ label, value, total }: { label: string; value: number; to
 
 export default function MessagesPage() {
   const { user } = useAuth();
+  const { markRead, lastEvent } = useNotifications();
   const role = (user?.role || 'PO') as User['role'];
   const audiences = useMemo(
     () => (role === 'PO' || role === 'PC' ? [...AUDIENCES[role], SPECIFIC_AUDIENCE] : AUDIENCES[role] ?? []),
@@ -239,6 +241,13 @@ export default function MessagesPage() {
     setPage,
     refresh,
   } = usePaginatedData<Message>({ url });
+
+  // Refresh the open inbox when a new message notification arrives so the
+  // badge and list stay consistent without polling every page.
+  useEffect(() => {
+    if (tab === 'inbox' && lastEvent) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastEvent?.at]);
 
   const listItems = Array.isArray(listData) ? listData : [];
   const messages =
@@ -330,7 +339,7 @@ export default function MessagesPage() {
     setSelectedId(m.id);
     if (tab === 'inbox' && !m.readByRecipient && !readLocally.has(m.id)) {
       setReadLocally((prev) => new Set(prev).add(m.id));
-      messageApi.markAsRead(m.id).catch(() => {});
+      markRead(m.id);
     }
   };
 
@@ -657,7 +666,7 @@ export default function MessagesPage() {
                 : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-900'
             }`}
           >
-            <item.icon size={17} className={item.active ? 'text-primary-500' : 'text-neutral-400'} />
+            <item.icon size={17} className={item.active ? 'text-primary-500' : 'text-neutral-500'} />
             <span className="lg:inline">{item.label}</span>
           </button>
         ))}
@@ -716,7 +725,7 @@ export default function MessagesPage() {
                 </Badge>
               </div>
               <p className="text-[13px] text-neutral-500 truncate mt-0.5">{t.messageTitle}</p>
-              <p className="text-[12px] text-neutral-400 mt-1">
+              <p className="text-[12px] text-neutral-500 mt-1">
                 {t.updatedAt ? fmtTimestamp(t.updatedAt) : ''}
               </p>
             </button>
@@ -785,7 +794,7 @@ export default function MessagesPage() {
                     <span className="text-[13px] font-semibold text-neutral-800 truncate">
                       {tab === 'inbox' ? m.senderName : scopeLine(m)}
                     </span>
-                    <span className="text-[12px] text-neutral-400 whitespace-nowrap shrink-0">
+                    <span className="text-[12px] text-neutral-500 whitespace-nowrap shrink-0">
                       {fmtTimestamp(m.createdAt)}
                     </span>
                   </div>
@@ -852,7 +861,7 @@ export default function MessagesPage() {
           <button
             type="button"
             onClick={() => setSelectedId(null)}
-            className="hidden md:inline-flex p-1.5 rounded-[10px] text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100"
+            className="hidden md:inline-flex p-1.5 rounded-[10px] text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100"
             aria-label="Close message"
           >
             <X size={16} />
@@ -926,7 +935,7 @@ export default function MessagesPage() {
                 Need clarification
               </button>
             </div>
-            <p className="text-[12.5px] text-neutral-400 mt-2 flex items-center gap-3">
+            <p className="text-[12.5px] text-neutral-500 mt-2 flex items-center gap-3">
               <span className="flex items-center gap-1 text-success-600">
                 <ThumbsUp size={11} /> {counts.up.toLocaleString()} acknowledged
               </span>
@@ -965,7 +974,7 @@ export default function MessagesPage() {
                             <span className={`text-[12.5px] font-semibold ${mine ? 'text-neutral-800' : 'text-primary-700'}`}>
                               {mine ? 'You' : recipientThread.senderName}
                             </span>
-                            <span className="text-[11.5px] text-neutral-400">{fmtTimestamp(e.createdAt)}</span>
+                            <span className="text-[11.5px] text-neutral-500">{fmtTimestamp(e.createdAt)}</span>
                           </div>
                           <p className="text-[14px] text-neutral-700 leading-relaxed mt-1 whitespace-pre-wrap break-words">
                             {e.content}
@@ -1069,7 +1078,7 @@ export default function MessagesPage() {
           <button
             type="button"
             onClick={() => setSelectedId(null)}
-            className="hidden md:inline-flex p-1.5 rounded-[10px] text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100"
+            className="hidden md:inline-flex p-1.5 rounded-[10px] text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100"
             aria-label="Close message"
           >
             <X size={16} />
@@ -1280,7 +1289,7 @@ export default function MessagesPage() {
               {recipientQuery.trim() !== '' && (
                 <div className="mt-2 border border-neutral-200/80 rounded-[10px] bg-white shadow-soft overflow-hidden">
                   {recipientResults.length === 0 ? (
-                    <p className="px-3.5 py-2.5 text-[13px] text-neutral-400">
+                    <p className="px-3.5 py-2.5 text-[13px] text-neutral-500">
                       {recipientSearching ? 'Searching…' : 'No matching recipients.'}
                     </p>
                   ) : (
@@ -1415,7 +1424,7 @@ export default function MessagesPage() {
               <Badge variant={statusVariant(threadModal.thread.status)} size="sm">
                 {statusLabel(threadModal.thread.status)}
               </Badge>
-              <span className="text-[13px] text-neutral-400">
+              <span className="text-[13px] text-neutral-500">
                 {threadModal.thread.updatedAt ? fmtDateTime(threadModal.thread.updatedAt) : ''}
               </span>
             </div>
@@ -1433,7 +1442,7 @@ export default function MessagesPage() {
                       <span className={`text-[13px] font-semibold ${mine ? 'text-neutral-800' : 'text-primary-700'}`}>
                         {mine ? threadModal.thread?.requesterName : threadModal.thread?.senderName}
                       </span>
-                      <span className="text-[12px] text-neutral-400">{fmtTimestamp(e.createdAt)}</span>
+                      <span className="text-[12px] text-neutral-500">{fmtTimestamp(e.createdAt)}</span>
                     </div>
                     <p className="text-[14px] text-neutral-700 leading-relaxed mt-1 whitespace-pre-wrap break-words">
                       {e.content}
@@ -1482,19 +1491,19 @@ export default function MessagesPage() {
         {renderRail()}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(320px,400px)_minmax(0,1fr)] lg:grid-cols-[176px_minmax(340px,420px)_minmax(0,1fr)] h-[calc(100dvh-252px)] min-h-[460px] overflow-hidden lg:border lg:border-neutral-200/70 lg:rounded-[16px] lg:bg-white lg:shadow-card md:gap-3 md:rounded-[16px] md:border md:border-neutral-200/70 md:bg-white md:shadow-card lg:gap-0">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(320px,400px)_minmax(0,1fr)] lg:grid-cols-[176px_minmax(340px,420px)_minmax(0,1fr)] h-[calc(100dvh-240px)] min-h-[460px] overflow-hidden lg:border lg:border-neutral-200/80 lg:rounded-[14px] lg:bg-white lg:shadow-soft gap-3 lg:gap-0">
         <aside className="hidden lg:flex flex-col gap-0.5 p-3 border-r border-neutral-200/70 bg-neutral-50/40">
           {renderRail()}
         </aside>
 
         <section
-          className={`flex-col min-w-0 md:flex ${selectedId && tab !== 'incoming' ? 'hidden md:flex' : 'flex'} md:border md:border-neutral-200/70 md:rounded-[16px] md:bg-white md:shadow-card lg:border-0 lg:rounded-none lg:shadow-none lg:border-r lg:border-neutral-200/70 overflow-hidden`}
+          className={`flex-col min-w-0 md:flex ${selectedId && tab !== 'incoming' ? 'hidden md:flex' : 'flex'} border border-neutral-200/80 rounded-[14px] bg-white shadow-soft lg:border-0 lg:rounded-none lg:shadow-none lg:border-r lg:border-neutral-200/70 overflow-hidden`}
         >
           <div className="p-3 border-b border-neutral-200/70 shrink-0">
             <div className="flex items-center justify-between gap-2 mb-2">
               <p className="text-[13px] font-semibold text-neutral-700">
                 {tab === 'inbox' ? 'Inbox' : tab === 'sent' ? 'Sent' : 'Clarifications'}
-                <span className="text-neutral-400 font-medium ml-1.5">
+                <span className="text-neutral-500 font-medium ml-1.5">
                   {totalElements.toLocaleString()}
                 </span>
               </p>
@@ -1541,7 +1550,7 @@ export default function MessagesPage() {
           </div>
         </section>
 
-        <section className={`flex-col min-w-0 ${selectedId === null || tab === 'incoming' ? 'hidden md:flex' : 'flex'} md:border md:border-neutral-200/70 md:rounded-[16px] md:bg-white md:shadow-card lg:border-0 lg:rounded-none lg:shadow-none overflow-hidden`}>
+        <section className={`flex-col min-w-0 ${selectedId === null || tab === 'incoming' ? 'hidden md:flex' : 'flex'} border border-neutral-200/80 rounded-[14px] bg-white shadow-soft lg:border-0 lg:rounded-none lg:shadow-none overflow-hidden`}>
           {renderDetail()}
         </section>
       </div>

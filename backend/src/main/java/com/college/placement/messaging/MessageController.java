@@ -5,13 +5,16 @@ import com.college.placement.common.dto.PaginatedResponse;
 import com.college.placement.messaging.dto.CreateMessageRequest;
 import com.college.placement.messaging.dto.MessageReactionRequest;
 import com.college.placement.messaging.dto.MessageResponse;
+import com.college.placement.messaging.dto.UnreadCountResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/messages")
@@ -47,6 +50,16 @@ public class MessageController {
     public ResponseEntity<ApiResponse<Void>> markAsRead(@PathVariable Long messageId) {
         messageService.markAsRead(messageId);
         return ResponseEntity.ok(ApiResponse.success("Message marked as read", null));
+    }
+
+    @GetMapping("/unread-count")
+    public ResponseEntity<ApiResponse<UnreadCountResponse>> getUnreadCount() {
+        return ResponseEntity.ok(ApiResponse.success(messageService.getUnreadCount()));
+    }
+
+    @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamEvents() {
+        return messageService.subscribeToEvents();
     }
 
     @PostMapping("/{messageId}/reaction")

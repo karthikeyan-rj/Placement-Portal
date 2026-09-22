@@ -8,9 +8,11 @@
   --color-surface: #FFFFFF;
   --color-dark: #0B1020;
   --color-text-primary: #111827;
-  --color-text-secondary: #667085;
+  --color-text-secondary: #475467;
+  --color-text-tertiary: #667085;
   --color-muted: #98A2B3;
-  --color-border: rgba(148,163,184,0.20);
+  --color-border: #E4E7EC;
+  --color-border-strong: #7E8C9F;
 
   --color-primary-50: #F5F3FF;
   --color-primary-100: #EDE9FE;
@@ -29,6 +31,7 @@
   --color-accent-300: #38BDF8;
   --color-accent-400: #0EA5E9;
   --color-accent-500: #0284C7;
+  --color-accent-600: #0369A1;
 
   --color-success-50: #F0FDF4;
   --color-success-500: #16A34A;
@@ -64,11 +67,11 @@
   --color-neutral-800: #1E293B;
   --color-neutral-900: #0F172A;
 
-  --shadow-soft: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
-  --shadow-raised: 0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
-  --shadow-overlay: 0 16px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
-  --shadow-glass: 0 8px 32px rgba(0,0,0,0.08);
+  --shadow-soft: 0 1px 2px rgba(16,24,40,0.04);
+  --shadow-card: 0 1px 2px rgba(16,24,40,0.05), 0 1px 3px rgba(16,24,40,0.03);
+  --shadow-raised: 0 6px 16px rgba(16,24,40,0.07), 0 2px 4px rgba(16,24,40,0.04);
+  --shadow-overlay: 0 12px 32px rgba(16,24,40,0.12), 0 4px 8px rgba(16,24,40,0.05);
+  --shadow-glass: 0 8px 32px rgba(16,24,40,0.08);
 
   --ring-primary: 0 0 0 3px rgba(102,92,246,0.15);
 
@@ -247,17 +250,17 @@
 /* ═══ Glass utilities ═══ */
 
 .glass {
-  background: rgba(255,255,255,0.72);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(16,24,40,0.07);
 }
 
 .glass-strong {
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(24px) saturate(200%);
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-  border: 1px solid rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(16,24,40,0.08);
 }
 
 .glass-dark {

@@ -26,6 +26,8 @@ public interface MessagingStore {
 
     void markRead(Long messageId, Long userId);
 
+    long countUnread(Long recipientUserId);
+
     void setReaction(Long messageId, Long userId, MessageReactionType reaction);
 
     MessageReactionType getMyReaction(Long messageId, Long userId);

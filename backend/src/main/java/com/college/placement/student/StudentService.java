@@ -98,6 +98,14 @@ public class StudentService {
         return toResponseFromProjection(projected);
     }
 
+    @Transactional(readOnly = true)
+    public StudentProfileResponse getMyStudentProfileOrNull() {
+        User currentUser = securityUtils.getCurrentUser();
+        return profileRepository.findByUserIdProjected(currentUser.getId())
+                .map(this::toResponseFromProjection)
+                .orElse(null);
+    }
+
     @Transactional
     public StudentProfileResponse createStudentProfile(CreateStudentRequest request) {
         securityUtils.requireAnyRole(Role.PO, Role.PC);

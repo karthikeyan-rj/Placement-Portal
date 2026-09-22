@@ -250,14 +250,13 @@ export default function PrManagementPage() {
   };
 
   return (
-    <div className="bg-background min-h-screen">
-      <PageContainer className="py-8">
+    <PageContainer>
         <PageHeader
           title="PR Management"
           description="Manage Placement Representatives by department."
         />
 
-        <div className="glass rounded-[14px] border border-white/40 p-4 mb-6">
+        <div className="bg-white rounded-[12px] border border-neutral-200/80 shadow-soft p-3.5 mb-4">
           <FilterToolbar
             filters={
               <div className="flex flex-wrap gap-3">
@@ -266,13 +265,13 @@ export default function PrManagementPage() {
                   placeholder="All Departments"
                   value={deptFilter}
                   onChange={(e) => setDeptFilter(e.target.value)}
-                  className="w-48"
+                  className="w-44"
                 />
                 {hasStudentFilters && (
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="self-center px-3 py-2 text-[13px] font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50/60 rounded-[10px] transition-colors"
+                    className="self-center px-2.5 py-1.5 text-[13px] font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50/60 rounded-[8px] transition-colors"
                   >
                     Clear filters
                   </button>
@@ -283,7 +282,7 @@ export default function PrManagementPage() {
         </div>
 
         {/* PR capacity */}
-        <div className="glass rounded-[14px] border border-white/40 p-4 mb-6">
+        <div className="bg-white rounded-[12px] border border-neutral-200/80 shadow-soft p-4 mb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <Gauge size={16} className="text-primary-600" />
@@ -299,7 +298,7 @@ export default function PrManagementPage() {
               style={{ width: `${capPct}%` }}
             />
           </div>
-          <p className="mt-2 text-[12.5px] text-neutral-400">{capLabel}</p>
+          <p className="mt-2 text-[12.5px] text-neutral-500">{capLabel}</p>
         </div>
 
         {actionError && (
@@ -345,7 +344,7 @@ export default function PrManagementPage() {
                         <Avatar name={u.name || 'U'} size="sm" />
                         <div className="min-w-0">
                           <p className="text-[14.5px] font-medium text-neutral-900 truncate">{u.name}</p>
-                          <p className="text-[12.5px] text-neutral-400 truncate">{u.email || '—'}</p>
+                          <p className="text-[12.5px] text-neutral-500 truncate">{u.email || '—'}</p>
                         </div>
                       </div>
                     ),
@@ -366,7 +365,7 @@ export default function PrManagementPage() {
                       u.departmentName ? (
                         <Badge variant="neutral">{u.departmentName}</Badge>
                       ) : (
-                        <span className="text-[14px] text-neutral-400">—</span>
+                        <span className="text-[14px] text-neutral-500">—</span>
                       ),
                   },
                   {
@@ -457,7 +456,7 @@ export default function PrManagementPage() {
                         <Avatar name={s.userName || 'U'} size="sm" />
                         <div className="min-w-0">
                           <p className="text-[14.5px] font-medium text-neutral-900 truncate">{s.userName}</p>
-                          <p className="text-[12.5px] text-neutral-400 truncate">{s.userEmail || '—'}</p>
+                          <p className="text-[12.5px] text-neutral-500 truncate">{s.userEmail || '—'}</p>
                         </div>
                       </div>
                     ),
@@ -478,7 +477,7 @@ export default function PrManagementPage() {
                       s.departmentName ? (
                         <Badge variant="neutral">{s.departmentName}</Badge>
                       ) : (
-                        <span className="text-[14px] text-neutral-400">—</span>
+                        <span className="text-[14px] text-neutral-500">—</span>
                       ),
                   },
                   {
@@ -520,7 +519,7 @@ export default function PrManagementPage() {
                             Promote
                           </Button>
                           {full && (
-                            <span className="text-[12px] text-neutral-400 whitespace-nowrap">
+                            <span className="text-[12px] text-neutral-500 whitespace-nowrap">
                               Full
                             </span>
                           )}
@@ -602,6 +601,5 @@ export default function PrManagementPage() {
           )}
         </Modal>
       </PageContainer>
-    </div>
   );
 }

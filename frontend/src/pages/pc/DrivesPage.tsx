@@ -416,7 +416,7 @@ export default function DrivesPage() {
 
   const renderInfoCell = (label: string, value: React.ReactNode, icon?: React.ReactNode) => (
     <div className="min-w-0">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-0.5">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-500 mb-0.5">
         {label}
       </p>
       <p className="flex items-center gap-1.5 text-[13.5px] font-medium text-neutral-700">
@@ -577,7 +577,7 @@ export default function DrivesPage() {
 
                   {d.packageLpa != null ? (
                     <div className="min-w-[92px]">
-                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-0.5">
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-500 mb-0.5">
                         Package
                       </p>
                       <p className="flex items-center gap-1 text-[14px] font-bold text-primary-600">
@@ -587,27 +587,27 @@ export default function DrivesPage() {
                     </div>
                   ) : (
                     <div className="min-w-[92px]">
-                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-0.5">
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-500 mb-0.5">
                         Package
                       </p>
-                      <p className="text-[13px] text-neutral-400">Not disclosed</p>
+                      <p className="text-[13px] text-neutral-500">Not disclosed</p>
                     </div>
                   )}
 
                   {renderInfoCell(
                     'Drive Date',
                     formatDriveDate(d.driveDate),
-                    <Calendar size={13} className="text-neutral-400 shrink-0" />
+                    <Calendar size={13} className="text-neutral-500 shrink-0" />
                   )}
 
                   {renderInfoCell(
                     'Register By',
                     formatDriveDate(d.registrationDeadline),
-                    <Calendar size={13} className="text-neutral-400 shrink-0" />
+                    <Calendar size={13} className="text-neutral-500 shrink-0" />
                   )}
 
                   <div className="min-w-[190px] flex-1 basis-44">
-                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-400 mb-0.5">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-neutral-500 mb-0.5">
                       Eligibility
                     </p>
                     <p className="flex items-start gap-1.5 text-[13px] text-neutral-600 leading-snug">
@@ -652,7 +652,7 @@ export default function DrivesPage() {
             {createError}
           </div>
         )}
-        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-3">
           Company &amp; Role
         </p>
         <div className="space-y-4 mb-6">
@@ -673,7 +673,7 @@ export default function DrivesPage() {
           />
         </div>
 
-        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-3">
           Schedule
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -696,7 +696,7 @@ export default function DrivesPage() {
           </p>
         )}
 
-        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-3">
           Placement Details
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -772,7 +772,7 @@ export default function DrivesPage() {
             <div className="grid grid-cols-2 gap-4">
               {viewDrive.driveDate != null && (
                 <div className="rounded-[14px] border border-neutral-200/70 bg-neutral-50/60 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">
                     Drive Date
                   </p>
                   <p className="text-[15px] font-semibold text-neutral-800">
@@ -782,7 +782,7 @@ export default function DrivesPage() {
               )}
               {viewDrive.registrationDeadline != null && (
                 <div className="rounded-[14px] border border-neutral-200/70 bg-neutral-50/60 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">
                     Registration Deadline
                   </p>
                   <p className="text-[15px] font-semibold text-neutral-800">
@@ -862,7 +862,7 @@ export default function DrivesPage() {
 
             {viewDrive.location && (
               <p className="flex items-center gap-1.5 text-[13.5px] text-neutral-500">
-                <MapPin size={14} className="text-neutral-400 shrink-0" />
+                <MapPin size={14} className="text-neutral-500 shrink-0" />
                 {viewDrive.location}
               </p>
             )}
@@ -893,7 +893,7 @@ export default function DrivesPage() {
             {eligError}
           </div>
         )}
-        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-3">
           Academic Thresholds
         </p>
         <div className="grid grid-cols-2 gap-4 mb-6">
@@ -948,7 +948,7 @@ export default function DrivesPage() {
           />
         </div>
 
-        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">
           Eligible Departments
         </p>
         <p className="text-[13px] text-neutral-500 mb-3">
@@ -957,7 +957,7 @@ export default function DrivesPage() {
         </p>
         {departments.length > 6 && (
           <div className="relative mb-3">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
             <input
               type="text"
               value={deptSearch}
@@ -990,7 +990,7 @@ export default function DrivesPage() {
         </div>
         <div className="max-h-52 overflow-y-auto rounded-[12px] border border-neutral-200/80 divide-y divide-neutral-100/80">
           {filteredDepartments.length === 0 ? (
-            <p className="px-4 py-5 text-center text-[13px] text-neutral-400">
+            <p className="px-4 py-5 text-center text-[13px] text-neutral-500">
               No departments found.
             </p>
           ) : (

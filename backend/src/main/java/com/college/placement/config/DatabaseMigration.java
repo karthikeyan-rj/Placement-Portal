@@ -93,7 +93,30 @@ public class DatabaseMigration implements CommandLineRunner {
                 "CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by_created ON audit_logs (performed_by, created_at DESC)",
                 "CREATE INDEX IF NOT EXISTS idx_placement_drives_status_date ON placement_drives (status, drive_date DESC)",
                 "CREATE INDEX IF NOT EXISTS idx_placement_drives_company ON placement_drives (company_id)",
-                "CREATE INDEX IF NOT EXISTS idx_contact_requests_target_created ON contact_requests (target_user_id, created_at DESC)"
+                "CREATE INDEX IF NOT EXISTS idx_contact_requests_target_created ON contact_requests (target_user_id, created_at DESC)",
+
+                // ---- Phase 7A.1: Interview Preparation Hub tables (backend-managed prep content) ----
+                "CREATE TABLE IF NOT EXISTS prep_modules (" +
+                        "id BIGSERIAL PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, title VARCHAR(255) NOT NULL, " +
+                        "description TEXT, sort_order INTEGER NOT NULL DEFAULT 0, active BOOLEAN NOT NULL DEFAULT TRUE, " +
+                        "created_at TIMESTAMP, updated_at TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS prep_topics (" +
+                        "id BIGSERIAL PRIMARY KEY, module_id BIGINT NOT NULL REFERENCES prep_modules(id), " +
+                        "code VARCHAR(100) NOT NULL UNIQUE, title VARCHAR(255) NOT NULL, description TEXT, " +
+                        "study_guide TEXT NOT NULL, estimated_minutes INTEGER, sort_order INTEGER NOT NULL DEFAULT 0, " +
+                        "active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMP, updated_at TIMESTAMP)",
+                "CREATE INDEX IF NOT EXISTS idx_prep_topics_module_sort ON prep_topics (module_id, sort_order)",
+                "CREATE TABLE IF NOT EXISTS prep_questions (" +
+                        "id BIGSERIAL PRIMARY KEY, topic_id BIGINT NOT NULL REFERENCES prep_topics(id), " +
+                        "question TEXT NOT NULL, answer_guide TEXT NOT NULL, difficulty VARCHAR(10) NOT NULL DEFAULT 'MEDIUM', " +
+                        "sort_order INTEGER NOT NULL DEFAULT 0, active BOOLEAN NOT NULL DEFAULT TRUE, " +
+                        "created_at TIMESTAMP, updated_at TIMESTAMP)",
+                "CREATE INDEX IF NOT EXISTS idx_prep_questions_topic_sort ON prep_questions (topic_id, sort_order)",
+                "CREATE TABLE IF NOT EXISTS student_prep_progress (" +
+                        "id BIGSERIAL PRIMARY KEY, student_profile_id BIGINT NOT NULL REFERENCES student_profiles(id), " +
+                        "topic_id BIGINT NOT NULL REFERENCES prep_topics(id), completed BOOLEAN NOT NULL DEFAULT FALSE, " +
+                        "confidence VARCHAR(10), updated_at TIMESTAMP, " +
+                        "CONSTRAINT uq_student_prep_topic UNIQUE (student_profile_id, topic_id))"
             );
 
             int successCount = 0;

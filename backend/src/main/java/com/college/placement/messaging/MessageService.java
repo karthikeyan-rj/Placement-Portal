@@ -9,8 +9,10 @@ import com.college.placement.common.exception.ForbiddenException;
 import com.college.placement.common.exception.ResourceNotFoundException;
 import com.college.placement.messaging.dto.CreateMessageRequest;
 import com.college.placement.messaging.dto.MessageReactionRequest;
+import com.college.placement.messaging.dto.MessageNotification;
 import com.college.placement.messaging.dto.MessageResponse;
 import com.college.placement.messaging.dto.MyReactionResponse;
+import com.college.placement.messaging.dto.UnreadCountResponse;
 import com.college.placement.messaging.store.MessagingStore;
 import com.college.placement.messaging.store.MessagingStore.ClarificationSummaryRow;
 import com.college.placement.messaging.store.MessagingStore.MessageStatsRow;
@@ -26,6 +28,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,6 +45,7 @@ public class MessageService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final SecurityUtils securityUtils;
+    private final MessageNotificationService notificationService;
 
     public MessageResponse sendMessage(CreateMessageRequest request) {
         User sender = securityUtils.getCurrentUser();
@@ -57,6 +61,16 @@ public class MessageService {
 
         auditService.log("SEND_MESSAGE", "Message", created.messageId(),
                 "To " + recipients.size() + " recipients");
+
+        notificationService.publishNewMessage(
+                recipients.stream().map(User::getId).toList(),
+                MessageNotification.builder()
+                        .type("NEW_MESSAGE")
+                        .messageId(created.messageId())
+                        .senderName(sender.getName())
+                        .title(created.title())
+                        .createdAt(created.createdAt() != null ? created.createdAt().toString() : null)
+                        .build());
 
         return toResponse(created, sender.getName(),
                 loadStats(store.messageStats(List.of(created.messageId()))),
@@ -81,6 +95,16 @@ public class MessageService {
             throw new ResourceNotFoundException("Message recipient");
         }
         store.markRead(messageId, currentUser.getId());
+    }
+
+    public UnreadCountResponse getUnreadCount() {
+        User currentUser = securityUtils.getCurrentUser();
+        return new UnreadCountResponse(store.countUnread(currentUser.getId()));
+    }
+
+    public SseEmitter subscribeToEvents() {
+        User currentUser = securityUtils.getCurrentUser();
+        return notificationService.subscribe(currentUser.getId());
     }
 
     public void addReaction(Long messageId, MessageReactionRequest request) {

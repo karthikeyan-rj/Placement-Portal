@@ -65,13 +65,13 @@ export function WelcomeHeader({
   subtitle?: string;
 }) {
   return (
-    <div className="flex items-center gap-4 flex-wrap animate-fadeIn">
+    <div className="flex items-center gap-3.5 flex-wrap animate-fadeIn">
       <Avatar name={name} size="lg" className="shrink-0" />
       <div className="min-w-0">
-        <h1 className="text-[24px] font-bold tracking-tight text-neutral-900 leading-tight">
+        <h1 className="text-[22px] sm:text-[26px] font-bold tracking-[-0.02em] text-neutral-900 leading-tight">
           Welcome back, {name}
         </h1>
-        <p className="text-[13px] text-text-secondary mt-1">
+        <p className="text-[13px] text-text-secondary mt-0.5">
           <span className="font-semibold text-neutral-700">{roleLabel}</span>
           {meta ? <span> · {meta}</span> : null}
         </p>
@@ -93,17 +93,17 @@ interface MetricCardProps {
 
 export function MetricCard({ label, value, icon: Icon, sub, href }: MetricCardProps) {
   const inner = (
-    <div className="h-full bg-white rounded-[14px] border border-neutral-200/60 p-5 shadow-soft transition-all duration-200 group-hover:border-primary-200 group-hover:shadow-card group-hover:-translate-y-0.5">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="shrink-0 flex items-center justify-center w-5 h-5 rounded-[7px] bg-primary-50 text-primary-600">
-          <Icon size={12} strokeWidth={2} />
+    <div className="h-full bg-white rounded-[14px] border border-neutral-200/80 p-4 shadow-soft transition-colors duration-150 group-hover:border-primary-200">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded-[8px] bg-primary-50 text-primary-600">
+          <Icon size={15} strokeWidth={2} />
         </span>
-        <p className="text-[13px] font-medium text-text-secondary truncate">{label}</p>
+        <p className="text-[12.5px] font-medium text-text-secondary truncate">{label}</p>
       </div>
-      <p className="mt-3 text-[28px] font-bold leading-none text-neutral-900 tracking-tight">
+      <p className="mt-2.5 text-[26px] font-bold leading-none text-neutral-900 tracking-tight">
         {value}
       </p>
-      {sub && <div className="mt-2 text-[12.5px] text-text-secondary truncate">{sub}</div>}
+      {sub && <div className="mt-1.5 text-[12px] text-text-secondary truncate">{sub}</div>}
     </div>
   );
 
@@ -136,11 +136,11 @@ export function DashboardSection({
 }: DashboardSectionProps) {
   return (
     <section
-      className={`bg-white rounded-[16px] border border-neutral-200/60 shadow-soft overflow-hidden ${className}`}
+      className={`bg-white rounded-[14px] border border-neutral-200/80 shadow-soft overflow-hidden ${className}`}
     >
-      <header className="flex items-center justify-between gap-3 px-5 py-4 border-b border-neutral-100">
+      <header className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-neutral-100">
         <div className="min-w-0">
-          <h2 className="text-[16px] font-semibold text-neutral-900 tracking-tight">{title}</h2>
+          <h2 className="text-[15px] font-semibold text-neutral-900 tracking-tight">{title}</h2>
           {subtitle && <p className="text-[12.5px] text-text-secondary mt-0.5">{subtitle}</p>}
         </div>
         {action && <div className="shrink-0">{action}</div>}
@@ -166,8 +166,8 @@ export function SectionAction({ label, to }: { label: string; to: string }) {
 
 export function DriveRow({ drive, to }: { drive: PlacementDrive; to?: string }) {
   const content = (
-    <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-100/60 last:border-0">
-      <span className="shrink-0 flex items-center justify-center w-10 h-10 rounded-[10px] bg-primary-50 text-primary-600">
+    <div className="flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 last:border-0">
+      <span className="shrink-0 flex items-center justify-center w-9 h-9 rounded-[9px] bg-primary-50 text-primary-600">
         <Building2 size={18} />
       </span>
       <div className="flex-1 min-w-0">
@@ -177,7 +177,7 @@ export function DriveRow({ drive, to }: { drive: PlacementDrive; to?: string }) 
         <div className="mt-1 flex items-center gap-4 flex-wrap text-[13px] text-text-secondary">
           {drive.driveDate && (
             <span className="flex items-center gap-1">
-              <Calendar size={13} className="text-neutral-400" />
+              <Calendar size={13} className="text-neutral-500" />
               {new Date(drive.driveDate).toLocaleDateString('en-IN', {
                 day: 'numeric',
                 month: 'short',
@@ -187,7 +187,7 @@ export function DriveRow({ drive, to }: { drive: PlacementDrive; to?: string }) 
           )}
           {drive.packageLpa != null && (
             <span className="flex items-center gap-1">
-              <IndianRupee size={13} className="text-neutral-400" />
+              <IndianRupee size={13} className="text-neutral-500" />
               {drive.packageLpa} LPA
             </span>
           )}
@@ -211,8 +211,8 @@ export function DriveRow({ drive, to }: { drive: PlacementDrive; to?: string }) 
 
 export function ContactRequestRow({ request, to }: { request: ContactRequest; to?: string }) {
   const content = (
-    <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-100/60 last:border-0">
-      <span className="shrink-0 flex items-center justify-center w-10 h-10 rounded-[10px] bg-accent-50 text-accent-500">
+    <div className="flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 last:border-0">
+      <span className="shrink-0 flex items-center justify-center w-9 h-9 rounded-[9px] bg-accent-50 text-accent-600">
         <Contact size={18} />
       </span>
       <div className="flex-1 min-w-0">
@@ -239,15 +239,15 @@ export function ContactRequestRow({ request, to }: { request: ContactRequest; to
 
 export function MessageRow({ message, to }: { message: Message; to?: string }) {
   const content = (
-    <div className="px-5 py-4 border-b border-neutral-100/60 last:border-0">
+    <div className="px-4 py-3.5 border-b border-neutral-100 last:border-0">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[14px] font-semibold text-neutral-900 truncate min-w-0">{message.title}</p>
-        <span className="text-[12px] text-neutral-400 shrink-0">
+        <span className="text-[12px] text-neutral-500 shrink-0">
           {new Date(message.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
         </span>
       </div>
       <p className="text-[13px] text-text-secondary mt-1 line-clamp-2 leading-relaxed">{message.content}</p>
-      <p className="text-[12.5px] text-neutral-400 mt-1.5 flex items-center gap-1.5">
+      <p className="text-[12.5px] text-neutral-500 mt-1.5 flex items-center gap-1.5">
         <MessagesSquare size={12} />
         {message.senderName} · {message.totalRecipients}{' '}
         {message.totalRecipients === 1 ? 'recipient' : 'recipients'}
@@ -267,8 +267,8 @@ export function MessageRow({ message, to }: { message: Message; to?: string }) {
 
 export function InterviewRow({ interview, to }: { interview: StudentInterview; to?: string }) {
   const content = (
-    <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-100/60 last:border-0">
-      <span className="shrink-0 flex items-center justify-center w-10 h-10 rounded-[10px] bg-neutral-100 text-neutral-500">
+    <div className="flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 last:border-0">
+      <span className="shrink-0 flex items-center justify-center w-9 h-9 rounded-[9px] bg-neutral-100 text-neutral-500">
         <Briefcase size={18} />
       </span>
       <div className="flex-1 min-w-0">
@@ -314,13 +314,13 @@ export function DashboardEmpty({
   description: string;
 }) {
   return (
-    <div className="py-8 flex flex-col items-center justify-center text-center px-6">
-      <span className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-100 text-neutral-400">
-        <Icon size={18} />
+    <div className="py-9 flex flex-col items-center justify-center text-center px-6">
+      <span className="flex items-center justify-center w-9 h-9 rounded-full bg-neutral-100 text-neutral-500">
+        <Icon size={17} />
       </span>
-      <p className="text-[14px] font-medium text-neutral-600 mt-3">{title}</p>
+      <p className="text-[13.5px] font-medium text-neutral-700 mt-3">{title}</p>
       {description && (
-        <p className="text-[12.5px] text-neutral-400 mt-1 max-w-sm leading-relaxed">{description}</p>
+        <p className="text-[12.5px] text-text-secondary mt-1 max-w-sm leading-relaxed">{description}</p>
       )}
     </div>
   );
@@ -336,7 +336,7 @@ export function DashboardError({
   onRetry?: () => void;
 }) {
   return (
-    <div className="m-4 rounded-[12px] border border-danger-500/10 bg-danger-50/60 p-4 flex items-start gap-3">
+    <div className="m-3 rounded-[10px] border border-danger-500/10 bg-danger-50/60 p-3.5 flex items-start gap-3">
       <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-[9px] bg-white text-danger-500 ring-1 ring-inset ring-danger-500/15">
         <AlertCircle size={15} />
       </span>
@@ -362,10 +362,10 @@ export function DashboardError({
 
 export function DashboardRowsSkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="divide-y divide-neutral-100/60">
+    <div className="divide-y divide-neutral-100">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 px-5 py-4">
-          <div className="w-10 h-10 rounded-[10px] bg-neutral-100 animate-pulse shrink-0" />
+        <div key={i} className="flex items-center gap-3 px-4 py-3.5">
+          <div className="w-9 h-9 rounded-[9px] bg-neutral-100 animate-pulse shrink-0" />
           <div className="flex-1 space-y-2">
             <div className="h-3.5 bg-neutral-100 animate-pulse rounded-full w-1/2" />
             <div className="h-2.5 bg-neutral-100 animate-pulse rounded-full w-2/5" />
@@ -378,15 +378,15 @@ export function DashboardRowsSkeleton({ rows = 3 }: { rows?: number }) {
 
 export function MetricsSkeleton({ count = 4 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="bg-white rounded-[14px] border border-neutral-200/60 p-5 shadow-soft">
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 w-5 h-5 rounded-[7px] bg-neutral-100 animate-pulse" />
+        <div key={i} className="bg-white rounded-[14px] border border-neutral-200/80 p-4 shadow-soft">
+          <div className="flex items-center gap-2.5">
+            <span className="shrink-0 w-7 h-7 rounded-[8px] bg-neutral-100 animate-pulse" />
             <span className="h-3 bg-neutral-100 animate-pulse rounded-full w-24" />
           </div>
-          <div className="mt-3 h-8 bg-neutral-100 animate-pulse rounded-lg w-16" />
-          <div className="mt-2 h-3 bg-neutral-100 animate-pulse rounded-full w-28" />
+          <div className="mt-2.5 h-7 bg-neutral-100 animate-pulse rounded-lg w-16" />
+          <div className="mt-1.5 h-3 bg-neutral-100 animate-pulse rounded-full w-28" />
         </div>
       ))}
     </div>

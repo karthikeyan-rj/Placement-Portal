@@ -263,8 +263,7 @@ export default function PcManagementPage() {
   };
 
   return (
-    <div className="bg-background min-h-screen">
-      <PageContainer className="py-8">
+    <PageContainer>
         <PageHeader
           title="PC Management"
           description="Manage Placement Coordinators and department assignments."
@@ -275,7 +274,7 @@ export default function PcManagementPage() {
           }
         />
 
-        <div className="glass rounded-[14px] border border-white/40 p-4 mb-4">
+        <div className="bg-white rounded-[12px] border border-neutral-200/80 shadow-soft p-3.5 mb-4">
           <FilterToolbar
             search={
               <SearchInput
@@ -346,7 +345,7 @@ export default function PcManagementPage() {
                       <Avatar name={u.name || 'U'} size="sm" />
                       <div className="min-w-0">
                         <p className="text-[14.5px] font-medium text-neutral-900 truncate">{u.name}</p>
-                        <p className="text-[12.5px] text-neutral-400 truncate">{u.email || '—'}</p>
+                        <p className="text-[12.5px] text-neutral-500 truncate">{u.email || '—'}</p>
                       </div>
                     </div>
                   ),
@@ -365,7 +364,7 @@ export default function PcManagementPage() {
                     u.departmentName ? (
                       <Badge variant="neutral">{u.departmentName}</Badge>
                     ) : (
-                      <span className="text-[14px] text-neutral-400">Unassigned</span>
+                      <span className="text-[14px] text-neutral-500">Unassigned</span>
                     ),
                 },
                 {
@@ -468,7 +467,7 @@ export default function PcManagementPage() {
                 ) : candError ? (
                   <p className="px-4 py-6 text-center text-[13.5px] text-danger-600">{candError}</p>
                 ) : candidates.length === 0 ? (
-                  <p className="px-4 py-8 text-center text-[13.5px] text-neutral-400">
+                  <p className="px-4 py-8 text-center text-[13.5px] text-neutral-500">
                     No candidates match your search.
                   </p>
                 ) : (
@@ -487,10 +486,10 @@ export default function PcManagementPage() {
                           <Avatar name={u.name || 'U'} size="sm" />
                           <div className="min-w-0 flex-1">
                             <p className="text-[14px] font-medium text-neutral-900 truncate">{u.name}</p>
-                            <p className="text-[12.5px] text-neutral-400 truncate">{u.email || '—'}</p>
+                            <p className="text-[12.5px] text-neutral-500 truncate">{u.email || '—'}</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[12px] text-neutral-400">
+                            <span className="text-[12px] text-neutral-500">
                               {deptName(u.departmentId) ?? 'No department'}
                             </span>
                             <Badge variant={u.role === 'PR' ? 'teal' : 'neutral'}>{u.role}</Badge>
@@ -532,7 +531,7 @@ export default function PcManagementPage() {
                   required
                 />
                 {assignDept && (
-                  <p className="mt-2 text-[12.5px] text-neutral-400">
+                  <p className="mt-2 text-[12.5px] text-neutral-500">
                     {pcCountByDept.get(Number(assignDept)) ?? 0} of {MAX_PCS_PER_DEPT} coordinator
                     slots used in this department.
                   </p>
@@ -576,6 +575,5 @@ export default function PcManagementPage() {
           )}
         </Modal>
       </PageContainer>
-    </div>
   );
 }
