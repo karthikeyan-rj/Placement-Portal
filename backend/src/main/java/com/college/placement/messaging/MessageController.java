@@ -3,6 +3,7 @@ package com.college.placement.messaging;
 import com.college.placement.common.dto.ApiResponse;
 import com.college.placement.common.dto.PaginatedResponse;
 import com.college.placement.messaging.dto.CreateMessageRequest;
+import com.college.placement.messaging.dto.EmailStatusResponse;
 import com.college.placement.messaging.dto.MessageReactionRequest;
 import com.college.placement.messaging.dto.MessageResponse;
 import com.college.placement.messaging.dto.UnreadCountResponse;
@@ -15,6 +16,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/messages")
@@ -81,6 +85,26 @@ public class MessageController {
             @PathVariable Long messageId,
             @PathVariable String type) {
         return ResponseEntity.ok(ApiResponse.success(messageService.getMessageAnalytics(messageId, type)));
+    }
+
+    @GetMapping("/recipients/count")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> countRecipients(
+            @RequestParam(required = false) Boolean everyone,
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) String targetRole,
+            @RequestParam(required = false) List<Long> recipientIds) {
+        CreateMessageRequest request = new CreateMessageRequest();
+        request.setEveryone(everyone);
+        request.setDepartmentId(departmentId);
+        request.setTargetRole(targetRole);
+        request.setRecipientIds(recipientIds);
+        return ResponseEntity.ok(ApiResponse.success(
+                Map.of("count", messageService.countRecipients(request))));
+    }
+
+    @GetMapping("/{messageId}/email-status")
+    public ResponseEntity<ApiResponse<EmailStatusResponse>> getEmailStatus(@PathVariable Long messageId) {
+        return ResponseEntity.ok(ApiResponse.success(messageService.getEmailStatus(messageId)));
     }
 
     private PaginatedResponse<MessageResponse> toPaginated(Page<MessageResponse> page) {

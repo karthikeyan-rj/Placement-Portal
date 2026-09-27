@@ -31,16 +31,45 @@ public class DepartmentCodeResolver {
     }
 
     public Optional<Department> resolve(String csvCode) {
-        if (csvCode == null) {
+        String canonical = canonicalize(csvCode);
+        if (canonical.isEmpty()) {
             return Optional.empty();
         }
-        String normalized = csvCode.trim().toUpperCase();
-        String canonical = CSV_TO_DEPT.getOrDefault(normalized, normalized);
 
         Department dept = departmentRepository.findByNameIgnoreCase(canonical).orElse(null);
         if (dept == null && "MSCDATASC".equals(canonical)) {
             dept = departmentRepository.save(Department.builder().name(canonical).build());
         }
         return Optional.ofNullable(dept);
+    }
+
+    /**
+     * Strict resolution for validation flows (e.g. PO student CSV import):
+     * resolves to an existing department only and NEVER creates one. Unknown
+     * codes return empty so the caller can reject the row.
+     */
+    public Optional<Department> resolveStrict(String csvCode) {
+        String canonical = canonicalize(csvCode);
+        if (canonical.isEmpty()) {
+            return Optional.empty();
+        }
+        return departmentRepository.findByNameIgnoreCase(canonical);
+    }
+
+    /**
+     * Canonicalizes a CSV department token to the DB department name without
+     * touching the database. Case-insensitive; e.g. "cse" → "CSE",
+     * "MECH" → "MECHANICAL", "Computer Science" stays uppercased for a
+     * direct name match attempt by the caller.
+     */
+    public static String canonicalize(String csvCode) {
+        if (csvCode == null) {
+            return "";
+        }
+        String normalized = csvCode.trim().toUpperCase();
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        return CSV_TO_DEPT.getOrDefault(normalized, normalized);
     }
 }

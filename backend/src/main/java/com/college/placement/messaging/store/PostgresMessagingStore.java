@@ -1,5 +1,6 @@
 package com.college.placement.messaging.store;
 
+import com.college.placement.common.enums.MessageImportance;
 import com.college.placement.common.enums.MessageReactionType;
 import com.college.placement.common.enums.MessageType;
 import com.college.placement.messaging.ClarificationEntry;
@@ -60,12 +61,13 @@ public class PostgresMessagingStore implements MessagingStore {
     @Override
     @Transactional
     public StoredMessage createMessage(User sender, String title, String content, MessageType type,
-                                       List<User> recipients, LocalDateTime deliveredAt) {
+                                       MessageImportance importance, List<User> recipients, LocalDateTime deliveredAt) {
         Message message = messageRepository.save(Message.builder()
                 .sender(sender)
                 .title(title)
                 .content(content)
                 .messageType(type)
+                .importance(importance)
                 .build());
         final Message savedMessage = message;
 
@@ -400,6 +402,7 @@ public class PostgresMessagingStore implements MessagingStore {
                 m.getTitle(),
                 m.getContent(),
                 m.getMessageType().name(),
+                m.getImportance().name(),
                 m.getCreatedAt());
     }
 }

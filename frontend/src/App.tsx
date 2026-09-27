@@ -35,6 +35,7 @@ const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const StudentDrivesPage = lazy(() => import('./pages/student/DrivesPage'));
 const InterviewsPage = lazy(() => import('./pages/student/InterviewsPage'));
 const ResumeAnalyzerPage = lazy(() => import('./pages/student/ResumeAnalyzerPage'));
+const MockInterviewPage = lazy(() => import('./pages/student/MockInterviewPage'));
 
 function SuspenseRoute({ children }: { children: ReactNode }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
@@ -125,6 +126,7 @@ function App() {
                 <Route path="/student/interviews" element={<SuspenseRoute><InterviewsPage /></SuspenseRoute>} />
                 <Route path="/interviews" element={<SuspenseRoute><InterviewsPage /></SuspenseRoute>} />
                 <Route path="/resume-analyzer" element={<SuspenseRoute><ResumeAnalyzerPage /></SuspenseRoute>} />
+                <Route path="/mock-interview" element={<SuspenseRoute><MockInterviewPage /></SuspenseRoute>} />
               </Route>
             </Route>
           </Route>

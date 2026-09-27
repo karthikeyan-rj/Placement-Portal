@@ -20,6 +20,19 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  # Flyway owns the schema; Hibernate only validates it (ddl-auto=validate).
+  # baseline-on-migrate lets an existing, already-populated database be adopted
+  # as the baseline instead of being recreated. V1 is the pre-Flyway schema and
+  # is skipped on such databases; V2+ are additive and always run in order.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: Pre-Flyway schema baselined by Phase 7D.0
+    validate-on-migrate: true
+    out-of-order: false
+
   servlet:
     multipart:
       max-file-size: 10MB
@@ -45,6 +58,24 @@ app:
     seed-enabled: ${SEED_PREPARATION_CONTENT:true}
   messaging:
     storage: ${APP_MESSAGING_STORAGE:mongo}
+  email:
+    enabled: ${APP_EMAIL_NOTIFICATIONS_ENABLED:false}
+    provider: ${APP_EMAIL_PROVIDER:mock}
+    resend-api-key: ${RESEND_API_KEY:}
+    from-email: ${RESEND_FROM_EMAIL:placements@yourdomain.com}
+    from-name: ${RESEND_FROM_NAME:Placement Portal}
+    reply-to: ${APP_EMAIL_REPLY_TO:}
+    frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+    batch-size: ${EMAIL_BATCH_SIZE:50}
+    worker-interval-ms: ${EMAIL_WORKER_INTERVAL_MS:2000}
+    max-attempts: ${EMAIL_MAX_ATTEMPTS:3}
+    retry-delay-base-seconds: ${EMAIL_RETRY_DELAY_BASE_SECONDS:60}
+    inflight-timeout-seconds: ${EMAIL_INFLIGHT_TIMEOUT_SECONDS:300}
+    connect-timeout-seconds: ${EMAIL_CONNECT_TIMEOUT_SECONDS:10}
+    request-timeout-seconds: ${EMAIL_REQUEST_TIMEOUT_SECONDS:15}
+    webhook-secret: ${RESEND_WEBHOOK_SECRET:}
+    webhook-tolerance-seconds: ${EMAIL_WEBHOOK_TOLERANCE_SECONDS:300}
+    mock-failure: ${EMAIL_MOCK_FAILURE:NONE}
   mongodb:
     enabled: ${APP_MONGODB_ENABLED:true}
     required: ${APP_MONGODB_REQUIRED:false}

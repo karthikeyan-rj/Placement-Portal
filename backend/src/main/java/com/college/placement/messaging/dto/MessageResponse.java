@@ -16,6 +16,7 @@ public class MessageResponse {
     private String title;
     private String content;
     private String messageType;
+    private String importance;
     private String createdAt;
     private int totalRecipients;
     private int deliveredCount;

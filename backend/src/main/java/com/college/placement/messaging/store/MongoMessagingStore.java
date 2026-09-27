@@ -1,5 +1,6 @@
 package com.college.placement.messaging.store;
 
+import com.college.placement.common.enums.MessageImportance;
 import com.college.placement.common.enums.MessageReactionType;
 import com.college.placement.common.enums.MessageType;
 import com.college.placement.messaging.ClarificationStatus;
@@ -58,7 +59,7 @@ public class MongoMessagingStore implements MessagingStore {
 
     @Override
     public StoredMessage createMessage(User sender, String title, String content, MessageType type,
-                                       List<User> recipients, LocalDateTime deliveredAt) {
+                                       MessageImportance importance, List<User> recipients, LocalDateTime deliveredAt) {
         long messageId = sequenceService.next("message");
         LocalDateTime created = deliveredAt != null ? deliveredAt : LocalDateTime.now();
         MongoMessage message = MongoMessage.builder()
@@ -69,6 +70,7 @@ public class MongoMessagingStore implements MessagingStore {
                 .title(title)
                 .content(content)
                 .messageType(type.name())
+                .importance(importance.name())
                 .createdAt(created)
                 .updatedAt(created)
                 .build();
@@ -451,6 +453,7 @@ public class MongoMessagingStore implements MessagingStore {
                 m.getTitle(),
                 m.getContent(),
                 m.getMessageType(),
+                m.getImportance(),
                 m.getCreatedAt());
     }
 

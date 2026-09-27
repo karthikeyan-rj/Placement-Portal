@@ -11,7 +11,9 @@ public class CreateMessageRequest {
     @NotBlank(message = "Content is required")
     private String content;
     private String messageType;
+    private Boolean everyone;
     private List<Long> recipientIds;
     private Long departmentId;
     private String targetRole;
+    private String importance;
 }

@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class ContactRequestResponse {
     private Long id;
     private Long studentProfileId;
+    private Long requesterUserId;
     private String studentName;
     private String registerNumber;
     private String departmentName;

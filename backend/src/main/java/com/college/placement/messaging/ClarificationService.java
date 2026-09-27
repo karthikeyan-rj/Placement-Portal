@@ -7,8 +7,10 @@ import com.college.placement.common.exception.ForbiddenException;
 import com.college.placement.common.exception.ResourceNotFoundException;
 import com.college.placement.messaging.dto.ClarificationCountsResponse;
 import com.college.placement.messaging.dto.ClarificationEntryResponse;
+import com.college.placement.messaging.dto.ClarificationEvent;
 import com.college.placement.messaging.dto.ClarificationResponse;
 import com.college.placement.messaging.store.MessagingStore;
+import com.college.placement.messaging.store.MessagingStore.RecipientExportRow;
 import com.college.placement.messaging.store.MessagingStore.StoredEntry;
 import com.college.placement.messaging.store.MessagingStore.StoredMessage;
 import com.college.placement.messaging.store.MessagingStore.StoredPage;
@@ -23,8 +25,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +38,7 @@ public class ClarificationService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final SecurityUtils securityUtils;
+    private final MessageNotificationService messageNotificationService;
 
     public ClarificationResponse createClarification(Long messageId, String content) {
         User principal = securityUtils.getCurrentUser();
@@ -69,6 +74,9 @@ public class ClarificationService {
         auditService.log("CLARIFICATION_CREATED", "ClarificationThread", thread.threadId(),
                 "Message " + messageId + " requester " + currentUser.getId());
 
+        broadcastClarificationEvent("CLARIFICATION_CREATED", messageId, thread.threadId(),
+                message.senderUserId());
+
         return toDetailResponse(updated, store.entriesForThread(thread.threadId(), Pageable.ofSize(50)));
     }
 
@@ -99,6 +107,12 @@ public class ClarificationService {
         auditService.log("CLARIFICATION_REPLIED", "ClarificationThread", thread.threadId(),
                 "Message " + thread.messageId() + " author " + currentUser.getId());
 
+        // The original sender's reply is the official answer; a requester reply is
+        // a follow-up that reopens the thread. Both change what every legitimate
+        // viewer of the parent message sees, so both emit a revalidation signal.
+        broadcastClarificationEvent(bySender ? "CLARIFICATION_REPLIED" : "CLARIFICATION_FOLLOWUP",
+                thread.messageId(), thread.threadId(), thread.senderUserId());
+
         return toDetailResponse(updated, store.entriesForThread(thread.threadId(), Pageable.ofSize(50)));
     }
 
@@ -118,14 +132,6 @@ public class ClarificationService {
             return new PageImpl<>(responses, pageable, page.totalElements());
         }
 
-        if (store.isRecipient(messageId, currentUser.getId())) {
-            StoredThread thread = store.getClarificationThread(messageId, currentUser.getId());
-            if (thread == null) {
-                return new PageImpl<>(List.of(), pageable, 0);
-            }
-            var single = List.of(toSummaryResponse(thread, namesById(userIdsOf(List.of(thread)))));
-            return new PageImpl<>(single, pageable, 1);
-        }
 
         throw new ForbiddenException("You cannot view clarifications for this message.");
     }
@@ -231,6 +237,48 @@ public class ClarificationService {
                 .createdAt(thread.createdAt() != null ? thread.createdAt().toString() : null)
                 .updatedAt(thread.updatedAt() != null ? thread.updatedAt().toString() : null)
                 .build();
+    }
+
+    /**
+     * Pushes a lightweight revalidation signal to the original message sender and
+     * to every actual persisted recipient of the parent message.
+     *
+     * <p>Recipients come exclusively from the persisted {@code MessageRecipient}
+     * documents for the parent message; role, department and audience are never
+     * recomputed, so the target set can never exceed the real audience. The ids
+     * are resolved with a single query and de-duplicated, so a sender who is also
+     * a recipient (or a user with several open tabs) receives exactly one event
+     * per connected stream. Nothing is sent for offline users: the data already
+     * lives in Mongo and is read authoritatively when they open the message.
+     *
+     * <p>Never called before the write has been persisted and audited, and never
+     * throws into the caller's transaction.
+     */
+    private void broadcastClarificationEvent(String type, Long messageId, Long threadId, Long senderUserId) {
+        Set<Long> targets = new LinkedHashSet<>();
+        if (senderUserId != null) {
+            targets.add(senderUserId);
+        }
+        try {
+            for (RecipientExportRow row : store.recipientsForExport(messageId)) {
+                if (row.userId() != null) {
+                    targets.add(row.userId());
+                }
+            }
+        } catch (RuntimeException ex) {
+            // The clarification is already persisted; a failed revalidation lookup
+            // must never turn a successful write into an error for the client.
+            return;
+        }
+        if (targets.isEmpty()) {
+            return;
+        }
+        ClarificationEvent payload = ClarificationEvent.builder()
+                .type(type)
+                .messageId(messageId)
+                .threadId(threadId)
+                .build();
+        messageNotificationService.broadcast(List.copyOf(targets), type, payload);
     }
 
     private ClarificationResponse toDetailResponse(StoredThread thread, StoredPage<StoredEntry> entries) {

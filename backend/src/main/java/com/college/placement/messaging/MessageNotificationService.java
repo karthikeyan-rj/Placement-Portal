@@ -71,17 +71,28 @@ public class MessageNotificationService {
     }
 
     public void publishNewMessage(Collection<Long> recipientIds, MessageNotification payload) {
-        if (recipientIds == null || recipientIds.isEmpty()) {
+        broadcast(recipientIds, "NEW_MESSAGE", payload);
+    }
+
+    /**
+     * Fans out an {@code eventName} event (e.g. {@code CLARIFICATION_CREATED},
+     * {@code CLARIFICATION_REPLIED}) to the live SSE connections of every
+     * targeted user id. Only authorized recipients are reachable here: each
+     * call site is responsible for passing the actual recipient set (or the
+     * original message sender) that the event legitimately targets.
+     */
+    public void broadcast(Collection<Long> userIds, String eventName, Object payload) {
+        if (userIds == null || userIds.isEmpty() || eventName == null) {
             return;
         }
-        for (Long userId : recipientIds) {
+        for (Long userId : userIds) {
             Set<SseEmitter> set = connections.get(userId);
             if (set == null || set.isEmpty()) {
                 continue;
             }
             for (SseEmitter emitter : set) {
                 send(userId, emitter,
-                        SseEmitter.event().name("NEW_MESSAGE").data(payload, MediaType.APPLICATION_JSON));
+                        SseEmitter.event().name(eventName).data(payload, MediaType.APPLICATION_JSON));
             }
         }
     }

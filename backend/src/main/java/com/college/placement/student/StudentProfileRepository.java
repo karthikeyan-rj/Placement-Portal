@@ -20,6 +20,9 @@ public interface StudentProfileRepository extends JpaRepository<StudentProfile, 
 
     boolean existsByRegisterNumber(String registerNumber);
 
+    /** Batch lookup used by the PO student CSV import to avoid per-row queries. */
+    List<StudentProfile> findAllByRegisterNumberIn(Collection<String> registerNumbers);
+
     boolean existsByUserId(Long userId);
 
     List<StudentProfile> findByUserDepartmentId(Long departmentId);

@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +34,7 @@ public class AccessCodeService {
     private final StudentAccessCodeRepository accessCodeRepository;
     private final DepartmentCodeResolver departmentResolver;
     private final AccessCodeHasher accessCodeHasher;
+    private final AccessCodeGenerator accessCodeGenerator;
     private final UserRepository userRepository;
 
     @Value("${app.authorized-csv-path:data/authorized_users.csv}")
@@ -42,10 +42,6 @@ public class AccessCodeService {
 
     @Value("${app.generated-codes-csv-path:data/generated_access_codes.csv}")
     private String generatedCodesCsvPath;
-
-    private static final String CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-    private static final int CODE_LENGTH = 8;
-    private static final SecureRandom RANDOM = new SecureRandom();
 
     @Transactional
     public GenerateAccessCodesResponse generateCodes(Long adminUserId) {
@@ -86,7 +82,7 @@ public class AccessCodeService {
                 continue;
             }
 
-            String code = generateUniqueCode(usedCodes);
+            String code = accessCodeGenerator.generateUnique(usedCodes);
             toSave.add(StudentAccessCode.builder()
                     .registerNumber(student.registerNumber())
                     .name(student.name())
@@ -138,22 +134,6 @@ public class AccessCodeService {
             throw new BadRequestException("Failed to read authorized CSV: " + e.getMessage());
         }
         return students;
-    }
-
-    private String generateUniqueCode(Set<String> usedCodes) {
-        String code;
-        do {
-            code = generateCode();
-        } while (!usedCodes.add(code));
-        return code;
-    }
-
-    private String generateCode() {
-        StringBuilder sb = new StringBuilder(CODE_LENGTH);
-        for (int i = 0; i < CODE_LENGTH; i++) {
-            sb.append(CODE_ALPHABET.charAt(RANDOM.nextInt(CODE_ALPHABET.length())));
-        }
-        return sb.toString();
     }
 
     private void appendPlaintext(List<String[]> rows) {

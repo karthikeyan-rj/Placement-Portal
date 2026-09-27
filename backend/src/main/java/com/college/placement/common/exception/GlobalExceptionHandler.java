@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -17,6 +18,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -37,6 +39,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI());
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.CONFLICT, "An account with this email or register number already exists.", request.getRequestURI());
     }
 
     @ExceptionHandler(ForbiddenException.class)
@@ -87,6 +94,16 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Validation failed: " + ex.getMessage(), request.getRequestURI());
     }
 
+    /**
+     * A malformed or absent JSON body is bad client input, not a server fault.
+     * Without this the generic handler turns a missing/unreadable request body
+     * into a 500.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "Malformed or missing request body.", request.getRequestURI());
+    }
+
     @ExceptionHandler(RateLimitException.class)
     public ResponseEntity<Map<String, Object>> handleRateLimit(RateLimitException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request.getRequestURI());
@@ -114,8 +131,61 @@ public class GlobalExceptionHandler {
         log.debug("Async response no longer usable (client disconnected): {}", ex.getMessage());
     }
 
+    /**
+     * A client that closes an SSE stream, or aborts a large upload mid-write, surfaces as a raw
+     * {@link IOException} rather than an {@link AsyncRequestNotUsableException}, so it would
+     * otherwise fall through to the generic handler. By then the response is already committed
+     * with {@code text/event-stream}, and writing a JSON error body raises
+     * {@code HttpMessageNotWritableException} — turning an ordinary disconnect into a 500 plus a
+     * failed {@code /error} dispatch. A dropped connection is not a server fault, so it is
+     * logged quietly and nothing is written back.
+     */
+    @ExceptionHandler(IOException.class)
+    public void handleIoFailure(IOException ex, HttpServletRequest request) {
+        if (isClientDisconnect(ex)) {
+            log.debug("Client disconnected from {}: {}", request.getRequestURI(), ex.getMessage());
+            return;
+        }
+        log.error("I/O failure on {}", request.getRequestURI(), ex);
+    }
+
+    /**
+     * Distinguishes a peer going away from a genuine server-side I/O fault. Only the former is
+     * safe to swallow, and only the latter should reach the client's logs as an error.
+     */
+    boolean isClientDisconnect(Throwable ex) {
+        for (Throwable current = ex; current != null; current = current.getCause()) {
+            if (current instanceof java.net.SocketException
+                    || current instanceof java.net.SocketTimeoutException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message == null) {
+                continue;
+            }
+            String lower = message.toLowerCase(java.util.Locale.ROOT);
+            if (lower.contains("connection reset")
+                    || lower.contains("broken pipe")
+                    || lower.contains("connection abort")
+                    || lower.contains("software in your host machine")
+                    || lower.contains("stream closed")) {
+                return true;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        return false;
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex, HttpServletRequest request) {
+        if (isClientDisconnect(ex)) {
+            // A peer that vanished mid-response is normal, not a server fault. The response is
+            // typically already committed, so there is nothing safe to write back.
+            log.debug("Client disconnected during {}: {}", request.getRequestURI(), ex.getMessage());
+            return null;
+        }
         log.error("Unhandled exception on {}: {}", request.getRequestURI(), ex.getMessage(), ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Something went wrong on the server. Please try again later.", request.getRequestURI());
     }

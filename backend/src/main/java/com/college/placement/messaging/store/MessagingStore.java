@@ -1,5 +1,6 @@
 package com.college.placement.messaging.store;
 
+import com.college.placement.common.enums.MessageImportance;
 import com.college.placement.common.enums.MessageReactionType;
 import com.college.placement.common.enums.MessageType;
 import com.college.placement.messaging.ClarificationStatus;
@@ -14,7 +15,7 @@ import java.util.List;
 public interface MessagingStore {
 
     StoredMessage createMessage(User sender, String title, String content, MessageType type,
-                                List<User> recipients, LocalDateTime deliveredAt);
+                                MessageImportance importance, List<User> recipients, LocalDateTime deliveredAt);
 
     StoredMessage getMessage(Long messageId);
 
@@ -73,7 +74,7 @@ public interface MessagingStore {
     StoredPage<StoredEntry> entriesForThread(Long threadId, Pageable pageable);
 
     record StoredMessage(Long messageId, Long senderUserId, String senderRole, String title,
-                         String content, String messageType, LocalDateTime createdAt) {
+                         String content, String messageType, String importance, LocalDateTime createdAt) {
     }
 
     record MessageStatsRow(Long messageId, long total, long delivered, long read,

@@ -10,6 +10,19 @@ import type {
   User,
   MeResponse,
   ProfileResponse,
+  StaffProfile,
+  UpdateStaffProfileRequest,
+  ImportPreviewResponse,
+  ImportConfirmResponse,
+  ImportRowPreview,
+  PaginatedResponse,
+  MockInterviewOptionsResponse,
+  StartMockInterviewRequest,
+  MockInterviewSessionResponse,
+  MockInterviewSummaryResponse,
+  MockInterviewResultResponse,
+  MockInterviewQuestionView,
+  MockSelfRating,
 } from '../types';
 
 // Cache stable reference data (departments, companies, current user profile) in
@@ -45,6 +58,15 @@ export const authApi = {
     accessCode: string;
     password: string;
   }) => api.post('/auth/register', data),
+  requestCode: (data: { email: string; registerNumber: string }) =>
+    api.post<{ message: string; maskedEmail: string }>('/auth/registration/request-code', data),
+  verifyCode: (data: { email: string; registerNumber: string; code: string }) =>
+    api.post<{ message: string; registrationToken: string }>('/auth/registration/verify-code', data),
+  completeRegistration: (data: { registrationToken: string; password: string; confirmPassword: string }) =>
+    api.post<{ message: string; userId: number; name: string; email: string; role: string }>(
+      '/auth/registration/complete',
+      data
+    ),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
   me: () => api.get<MeResponse>('/auth/me'),
@@ -53,6 +75,16 @@ export const authApi = {
 // Profile (unified, role-aware, self-derived)
 export const profileApi = {
   getMyProfile: () => refGet<ApiResponse<ProfileResponse>>('/profile/me'),
+  /**
+   * Saves the caller's own staff (PC / PO) profile. There is no userId: the
+   * server always edits the authenticated principal's own record. The cached
+   * profile read is invalidated so the saved values show up immediately.
+   */
+  updateMyStaffProfile: async (payload: UpdateStaffProfileRequest) => {
+    const r = await api.put<ApiResponse<StaffProfile>>('/profile/me/staff', payload);
+    invalidate('/profile');
+    return r;
+  },
 };
 
 // Public
@@ -272,6 +304,8 @@ export const placementDriveApi = {
     size?: number;
   }) => api.get('/placement-drives', { params }),
   getById: (id: number) => api.get(`/placement-drives/${id}`),
+  getEmailStatus: (id: number) => api.get(`/placement-drives/${id}/email-status`),
+  getEmailRecipientCount: (id: number) => api.get(`/placement-drives/${id}/email-recipient-count`),
   create: async (data: {
     companyId: number;
     jobRole: string;
@@ -280,6 +314,7 @@ export const placementDriveApi = {
     registrationDeadline?: string;
     location?: string;
     jobDescription?: string;
+    status?: string;
   }) => {
     const r = await api.post('/placement-drives', data);
     invalidate('/placement-drives');
@@ -321,11 +356,21 @@ export const messageApi = {
     recipientIds?: number[];
     departmentId?: number;
     targetRole?: string;
+    everyone?: boolean;
+    importance?: string;
   }) => {
     const r = await api.post('/messages', data);
     invalidate('/messages');
     return r;
   },
+  countRecipients: (params: {
+    everyone?: boolean;
+    departmentId?: number;
+    targetRole?: string;
+    recipientIds?: number[];
+  }) => api.get('/messages/recipients/count', { params }),
+  getEmailStatus: (messageId: number) =>
+    api.get(`/messages/${messageId}/email-status`),
   getAll: (params?: { page?: number; size?: number }) =>
     api.get('/messages', { params }),
   getSent: (params?: { page?: number; size?: number }) =>
@@ -376,9 +421,10 @@ export const contactRequestApi = {
   getMine: (params?: { page?: number; size?: number }) =>
     api.get('/contact-requests/mine', { params }),
   updateStatus: (id: number, status: string) =>
-    api.put(`/contact-requests/${id}/status`, null, {
-      params: { status },
-    }),
+    api.put(`/contact-requests/${id}/status`, { status }),
+  getTargets: () => api.get('/contact-requests/targets'),
+  getCounts: (view: 'incoming' | 'mine') =>
+    api.get('/contact-requests/counts', { params: { view } }),
 };
 
 // Student Interviews
@@ -441,4 +487,68 @@ export const resumeAnalyzerApi = {
   history: () => api.get('/resume-analyzer/me/history'),
   detail: (analysisId: number) =>
     api.get(`/resume-analyzer/me/history/${analysisId}`),
+};
+
+// PO Student CSV Import (Phase 7S.1)
+export const studentImportApi = {
+  template: () =>
+    api.get<Blob>('/students/import/template', { responseType: 'blob' }),
+  preview: (file: File) => {
+    const data = new FormData();
+    data.append('file', file);
+    return api.post<ImportPreviewResponse>('/students/import/preview', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  confirm: (rows: ImportRowPreview[]) =>
+    api.post<ImportConfirmResponse>('/students/import/confirm', {
+      rows: rows.map((r) => ({
+        rowNumber: r.rowNumber,
+        email: r.email,
+        name: r.name,
+        registerNumber: r.registerNumber,
+        department: r.department,
+      })),
+    }),
+};
+
+// Mock Interview (Phase 7N.2B)
+// Reuses the existing preparation bank; there is no separate question corpus.
+// Options are never cached here, because availability changes with the bank and
+// the setup screen must show real counts.
+export const mockInterviewApi = {
+  options: () => api.get<ApiResponse<MockInterviewOptionsResponse>>('/mock-interviews/options'),
+
+  start: (payload: StartMockInterviewRequest) =>
+    api.post<ApiResponse<MockInterviewSessionResponse>>('/mock-interviews', payload),
+
+  /** Returns null data when there is no interview in progress (a normal state). */
+  active: () => api.get<ApiResponse<MockInterviewSessionResponse>>('/mock-interviews/me/active'),
+
+  history: (params: { page?: number; size?: number; status?: string } = {}) =>
+    api.get<ApiResponse<PaginatedResponse<MockInterviewSummaryResponse>>>('/mock-interviews/me', { params }),
+
+  session: (sessionId: number) =>
+    api.get<ApiResponse<MockInterviewSessionResponse>>(`/mock-interviews/${sessionId}`),
+
+  results: (sessionId: number) =>
+    api.get<ApiResponse<MockInterviewResultResponse>>(`/mock-interviews/${sessionId}/results`),
+
+  saveAnswer: (sessionId: number, sessionQuestionId: number, studentAnswer: string) =>
+    api.put<ApiResponse<MockInterviewQuestionView>>(
+      `/mock-interviews/${sessionId}/questions/${sessionQuestionId}/answer`,
+      { studentAnswer }
+    ),
+
+  saveSelfRating: (sessionId: number, sessionQuestionId: number, selfRating: MockSelfRating | null) =>
+    api.put<ApiResponse<MockInterviewQuestionView>>(
+      `/mock-interviews/${sessionId}/questions/${sessionQuestionId}/self-rating`,
+      { selfRating }
+    ),
+
+  complete: (sessionId: number) =>
+    api.post<ApiResponse<MockInterviewSummaryResponse>>(`/mock-interviews/${sessionId}/complete`),
+
+  abandon: (sessionId: number) =>
+    api.post<ApiResponse<MockInterviewSummaryResponse>>(`/mock-interviews/${sessionId}/abandon`),
 };

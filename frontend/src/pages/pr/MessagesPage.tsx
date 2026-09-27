@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   messageApi,
   departmentApi,
@@ -6,7 +7,7 @@ import {
   clarificationApi,
   userApi,
 } from '../../api/api';
-import type { ClarificationThread, Department, Message, User } from '../../types';
+import type { ClarificationThread, Department, EmailStatusResponse, Message, User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationsContext';
 import {
@@ -53,13 +54,13 @@ interface ComposeAudience {
   label: string;
   hint: string;
   usesDepartment?: boolean;
+  mine?: boolean;
   specific?: boolean;
 }
 
-const MESSAGE_TYPE_OPTIONS = [
-  { label: 'Broadcast', value: 'BROADCAST' },
-  { label: 'Department', value: 'DEPARTMENT' },
-  { label: 'Direct', value: 'DIRECT' },
+const IMPORTANCE_OPTIONS = [
+  { label: 'Normal', value: 'NORMAL' },
+  { label: 'High (also emailed)', value: 'HIGH' },
 ];
 
 const SPECIFIC_AUDIENCE: ComposeAudience = {
@@ -71,16 +72,17 @@ const SPECIFIC_AUDIENCE: ComposeAudience = {
 
 const AUDIENCES: Record<User['role'], ComposeAudience[]> = {
   PO: [
+    { value: 'EVERYONE', label: 'Everyone', hint: 'Every active student, placement representative and coordinator across all departments.' },
     { value: 'ALL_STUDENTS', label: 'All Students', hint: 'Every active student across all departments.' },
     { value: 'ALL_PRS', label: 'All PR Representatives', hint: 'Every active placement representative.' },
     { value: 'ALL_PCS', label: 'All PC Coordinators', hint: 'Every active placement coordinator.' },
-    { value: 'ALL_POS', label: 'All Placement Officers', hint: 'Every active placement officer.' },
     { value: 'DEPT_ALL', label: 'Everyone in a Department', hint: 'Students, PRs and PCs within one department.', usesDepartment: true },
     { value: 'DEPT_STUDENTS', label: 'Students in a Department', hint: 'Students only, within one department.', usesDepartment: true },
     { value: 'DEPT_PRS', label: 'PRs in a Department', hint: 'Placement representatives only, within one department.', usesDepartment: true },
     { value: 'DEPT_PCS', label: 'PCs in a Department', hint: 'Placement coordinators only, within one department.', usesDepartment: true },
   ],
   PC: [
+    { value: 'EVERYONE', label: 'Everyone in My Department', hint: 'Every active student, PR and coordinator in your own department.', mine: true },
     { value: 'STUDENTS', label: 'Students (my department)', hint: 'Active students in your department.' },
     { value: 'PRS', label: 'PR Representatives (my department)', hint: 'Active placement representatives in your department.' },
     { value: 'PCS', label: 'PC Coordinators (my department)', hint: 'Active placement coordinators in your department.' },
@@ -92,8 +94,11 @@ const AUDIENCES: Record<User['role'], ComposeAudience[]> = {
 const ROLE_ALLOWLIST: Record<User['role'], User['role'][]> = {
   PO: ['STUDENT', 'PR', 'PC', 'PO'],
   PC: ['STUDENT', 'PR', 'PC'],
-  PR: [],
-  STUDENT: [],
+  // A PR or student may address a coordinator directly in the specific-recipient
+  // composer. The backend still re-checks every recipient on send, so this only
+  // narrows what the picker suggests.
+  PR: ['PC'],
+  STUDENT: ['PC'],
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -115,15 +120,28 @@ interface ComposeForm {
   messageType: string;
   audience: string;
   departmentId: string;
+  importance: string;
 }
 
-const emptyCompose = (audiences: ComposeAudience[]): ComposeForm => ({
-  title: '',
-  content: '',
-  messageType: 'DIRECT',
-  audience: audiences[0]?.value ?? '',
-  departmentId: '',
-});
+const COMPOSE_DEFAULT_AUDIENCE: Partial<Record<User['role'], string>> = {
+  PO: 'ALL_STUDENTS',
+  PC: 'EVERYONE',
+  PR: 'STUDENTS',
+};
+
+const emptyCompose = (audiences: ComposeAudience[], role: User['role']): ComposeForm => {
+  const preferred = COMPOSE_DEFAULT_AUDIENCE[role];
+  const fallback = audiences[0]?.value ?? '';
+  const audience = audiences.some((a) => a.value === preferred) ? (preferred as string) : fallback;
+  return {
+    title: '',
+    content: '',
+    messageType: '',
+    audience,
+    departmentId: '',
+    importance: 'NORMAL',
+  };
+};
 
 function fmtTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -162,7 +180,8 @@ function previewText(content: string): string {
 function scopeLine(m: Message): string {
   const label = TYPE_LABELS[m.messageType ?? ''] ?? 'Message';
   const n = m.totalRecipients.toLocaleString();
-  return `${label} · ${n} recipient${m.totalRecipients === 1 ? '' : 's'}`;
+  const priority = m.importance === 'HIGH' ? ' · High priority' : '';
+  return `${label} · ${n} recipient${m.totalRecipients === 1 ? '' : 's'}${priority}`;
 }
 
 function ProgressBar({ label, value, total }: { label: string; value: number; total: number }) {
@@ -187,10 +206,12 @@ function ProgressBar({ label, value, total }: { label: string; value: number; to
 
 export default function MessagesPage() {
   const { user } = useAuth();
-  const { markRead, lastEvent } = useNotifications();
+  const { markRead, lastEvent, clarificationSignal } = useNotifications();
+  const location = useLocation();
+  const navigate = useNavigate();
   const role = (user?.role || 'PO') as User['role'];
   const audiences = useMemo(
-    () => (role === 'PO' || role === 'PC' ? [...AUDIENCES[role], SPECIFIC_AUDIENCE] : AUDIENCES[role] ?? []),
+    () => [...(AUDIENCES[role] ?? []), SPECIFIC_AUDIENCE],
     [role]
   );
 
@@ -209,12 +230,19 @@ export default function MessagesPage() {
 
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeStep, setComposeStep] = useState<'compose' | 'confirm'>('compose');
-  const [form, setForm] = useState<ComposeForm>(() => emptyCompose(AUDIENCES[role] ?? []));
+  const [form, setForm] = useState<ComposeForm>(() => emptyCompose(AUDIENCES[role] ?? [], role));
   const [saving, setSaving] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState('');
   const [recipientResults, setRecipientResults] = useState<User[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // Display names for recipients that were preselected from elsewhere (e.g. a
+  // contact-request hand-off) and therefore are not in the current search page.
+  const [recipientNames, setRecipientNames] = useState<Record<number, string>>({});
   const [recipientSearching, setRecipientSearching] = useState(false);
+
+  const [emailCount, setEmailCount] = useState<number | null>(null);
+  const [emailCountLoading, setEmailCountLoading] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<Record<number, EmailStatusResponse>>({});
 
   const [sentThreads, setSentThreads] = useState<ClarificationThread[]>([]);
   const [sentThreadTotal, setSentThreadTotal] = useState(0);
@@ -381,10 +409,13 @@ export default function MessagesPage() {
   const audiencePayload = () => {
     const value = form.audience;
     const departmentId = form.departmentId ? Number(form.departmentId) : undefined;
+    if (value === 'EVERYONE') {
+      if (role === 'PC') return { departmentId: user?.departmentId ?? undefined };
+      return { everyone: true };
+    }
     if (value === 'ALL_STUDENTS') return { targetRole: 'STUDENT' };
     if (value === 'ALL_PRS') return { targetRole: 'PR' };
     if (value === 'ALL_PCS') return { targetRole: 'PC' };
-    if (value === 'ALL_POS') return { targetRole: 'PO' };
     if (value === 'DEPT_ALL') return { departmentId };
     if (value === 'DEPT_STUDENTS') return { departmentId, targetRole: 'STUDENT' };
     if (value === 'DEPT_PRS') return { departmentId, targetRole: 'PR' };
@@ -396,13 +427,37 @@ export default function MessagesPage() {
   };
 
   const openCompose = () => {
-    setForm(emptyCompose(audiences));
+    setForm(emptyCompose(audiences, role));
     setSelectedIds([]);
     setRecipientQuery('');
     setRecipientResults([]);
     setComposeStep('compose');
     setComposeOpen(true);
   };
+
+  // Deep link from an accepted contact request: open the composer on the
+  // specific-recipient audience with exactly that one participant preselected.
+  // Only an id and a display name travel through router state (never a token,
+  // email or other profile detail), and the send path re-validates the
+  // recipient server-side.
+  useEffect(() => {
+    const preselect = (location.state as { contactRecipient?: { id?: number; name?: string } } | null)
+      ?.contactRecipient;
+    if (!preselect || typeof preselect.id !== 'number') return;
+
+    // Consume the hand-off so a refresh or back navigation does not reopen it.
+    navigate(location.pathname, { replace: true, state: null });
+
+    setForm({ ...emptyCompose(audiences, role), audience: SPECIFIC_AUDIENCE.value });
+    setSelectedIds([preselect.id]);
+    if (preselect.name) {
+      setRecipientNames((prev) => ({ ...prev, [preselect.id as number]: preselect.name as string }));
+    }
+    setRecipientQuery('');
+    setRecipientResults([]);
+    setComposeStep('compose');
+    setComposeOpen(true);
+  }, [location.state, location.pathname, navigate, audiences, role]);
 
   const startSend = () => {
     if (!form.title.trim() || !form.content.trim()) {
@@ -431,19 +486,25 @@ export default function MessagesPage() {
       const res = await messageApi.send({
         title: form.title.trim(),
         content: form.content.trim(),
-        messageType: form.messageType,
+        importance: form.importance,
         ...(activeAudience?.specific
           ? { recipientIds: selectedIds }
           : { ...audiencePayload() }),
       });
       const sentCount = (res.data?.data as { totalRecipients?: number } | undefined)?.totalRecipients;
-      notify.success(
-        sentCount != null
-          ? `Message delivered to ${sentCount.toLocaleString()} recipient${sentCount === 1 ? '' : 's'}`
-          : 'Message sent successfully'
-      );
+      const countText =
+        sentCount != null ? ` to ${sentCount.toLocaleString()} recipient${sentCount === 1 ? '' : 's'}` : '';
+      if (form.importance === 'HIGH') {
+        notify.success(`High-priority message sent${countText} — emails dispatched to recipients`);
+      } else {
+        notify.success(
+          sentCount != null
+            ? `Message delivered${countText}`
+            : 'Message sent successfully'
+        );
+      }
       setComposeOpen(false);
-      setForm(emptyCompose(audiences));
+      setForm(emptyCompose(audiences, role));
       setSelectedIds([]);
       setSelectedId(null);
       setTab('sent');
@@ -536,6 +597,58 @@ export default function MessagesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, selectedId, sentClarPage]);
 
+  // Realtime revalidation of the shared clarification section.
+  //
+  // A CLARIFICATION_* event is a hint, not data: it carries only messageId/threadId.
+  // We act only when the parent message is the one currently open, then re-read the
+  // authoritative data through the normal (already authorized) endpoints. Events for
+  // any other message are ignored, so a busy page does no extra fetching. This never
+  // touches unreadCount or the red unread dot - that is NEW_MESSAGE's job alone.
+  useEffect(() => {
+    if (!clarificationSignal || !selected) return;
+    if (clarificationSignal.messageId !== selected.id) return;
+    let cancelled = false;
+
+    const revalidate = async () => {
+      try {
+        const list = await clarificationApi.listForMessage(selected.id, { page: 0, size: 50 });
+        if (cancelled) return;
+        const threads = (list.data?.data?.content ?? []) as ClarificationThread[];
+
+        if (tab === 'sent') {
+          setSentThreads(threads);
+          setSentThreadTotal(list.data?.data?.totalElements ?? threads.length);
+        }
+
+        if (tab === 'inbox') {
+          const own = threads.find((t) => t.threadId === recipientThread?.threadId) ?? threads[0];
+          if (own) {
+            const detail = await clarificationApi.getThread(own.threadId, { page: 0, size: 50 });
+            if (!cancelled) setRecipientThread(detail.data?.data ?? null);
+          }
+        }
+
+        // If the individually open thread is the one that changed, revalidate its
+        // entries too (scoped: never a full application reload).
+        if (threadModal && clarificationSignal.threadId === threadModal.threadId) {
+          const detail = await clarificationApi.getThread(threadModal.threadId, { page: 0, size: 50 });
+          if (!cancelled) {
+            setThreadModal((prev) => (prev ? { ...prev, thread: detail.data?.data ?? prev.thread } : prev));
+          }
+        }
+      } catch {
+        // Revalidation is best-effort: a failed refresh simply leaves the previous
+        // authoritative view in place until the next event or a manual reload.
+      }
+    };
+
+    void revalidate();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clarificationSignal?.at, selectedId, tab]);
+
   const postRecipientClarification = async () => {
     const content = rcText.trim();
     if (!content || !selected) return;
@@ -600,6 +713,12 @@ export default function MessagesPage() {
 
   const toggleRecipient = (u: User) => {
     setSelectedIds((prev) => (prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]));
+    setRecipientNames((prev) => {
+      if (prev[u.id] === u.name) return prev;
+      const next = { ...prev };
+      if (u.name) next[u.id] = u.name;
+      return next;
+    });
   };
 
   const searchTimer = useRef<number | null>(null);
@@ -631,6 +750,52 @@ export default function MessagesPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipientQuery, activeAudience?.specific, role]);
+
+  // Authoritative recipient count for Everyone + High-priority confirm step.
+  useEffect(() => {
+    const wantsCount =
+      composeOpen &&
+      form.importance === 'HIGH' &&
+      form.audience === 'EVERYONE' &&
+      (role === 'PO' || role === 'PC');
+    if (!wantsCount) {
+      setEmailCount(null);
+      return;
+    }
+    let cancelled = false;
+    setEmailCountLoading(true);
+    void messageApi
+      .countRecipients(role === 'PO' ? { everyone: true } : { departmentId: user?.departmentId ?? undefined })
+      .then((res) => {
+        const c = res.data?.data?.count;
+        if (!cancelled) setEmailCount(typeof c === 'number' ? c : null);
+      })
+      .catch(() => {
+        if (!cancelled) setEmailCount(null);
+      })
+      .finally(() => {
+        if (!cancelled) setEmailCountLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [composeOpen, form.importance, form.audience, role, user?.departmentId]);
+
+  // High-priority email delivery status for the open sent message.
+  useEffect(() => {
+    if (tab !== 'sent' || !selected || selected.importance !== 'HIGH') return;
+    let cancelled = false;
+    messageApi
+      .getEmailStatus(selected.id)
+      .then((res) => {
+        if (!cancelled && res.data?.data) setEmailStatus((prev) => ({ ...prev, [selected.id]: res.data.data }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, selectedId]);
 
   const confirmLine = (): string => {
     if (activeAudience?.specific) {
@@ -1137,6 +1302,62 @@ export default function MessagesPage() {
             )}
           </div>
 
+          {m.importance === 'HIGH' && (
+            <div className="mt-6 border-t border-neutral-200/70 pt-4 max-w-[760px]">
+              <h3 className="text-[15px] font-semibold text-neutral-900">High-priority email delivery</h3>
+              {emailStatus[m.id] ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                    <div className="rounded-[12px] bg-neutral-50 border border-neutral-200/70 px-3 py-2.5">
+                      <p className="text-[18px] font-bold text-success-600 tabular-nums">{emailStatus[m.id].delivered.toLocaleString()}</p>
+                      <p className="text-[12px] text-neutral-500 -mt-0.5">Delivered</p>
+                    </div>
+                    <div className="rounded-[12px] bg-neutral-50 border border-neutral-200/70 px-3 py-2.5">
+                      <p className="text-[18px] font-bold text-neutral-700 tabular-nums">{emailStatus[m.id].submitted.toLocaleString()}</p>
+                      <p className="text-[12px] text-neutral-500 -mt-0.5">Submitted</p>
+                    </div>
+                    <div className="rounded-[12px] bg-neutral-50 border border-neutral-200/70 px-3 py-2.5">
+                      <p className="text-[18px] font-bold text-neutral-700 tabular-nums">{emailStatus[m.id].pending.toLocaleString()}</p>
+                      <p className="text-[12px] text-neutral-500 -mt-0.5">Pending</p>
+                    </div>
+                    <div className="rounded-[12px] bg-neutral-50 border border-neutral-200/70 px-3 py-2.5">
+                      <p className="text-[18px] font-bold text-warning-600 tabular-nums">{emailStatus[m.id].failed.toLocaleString()}</p>
+                      <p className="text-[12px] text-neutral-500 -mt-0.5">Failed</p>
+                    </div>
+                  </div>
+                  {(emailStatus[m.id].delayed > 0 || emailStatus[m.id].bounced > 0 || emailStatus[m.id].complained > 0) && (
+                    <p className="text-[12.5px] text-warning-600 mt-2">
+                      {emailStatus[m.id].delayed.toLocaleString()} delayed, {emailStatus[m.id].bounced.toLocaleString()} bounced,{' '}
+                      {emailStatus[m.id].complained.toLocaleString()} marked as spam by recipients.
+                    </p>
+                  )}
+                  {emailStatus[m.id].suppressed > 0 && (
+                    <p className="text-[12.5px] text-warning-600 mt-2">
+                      {emailStatus[m.id].suppressed.toLocaleString()} suppressed by the email provider and will not be retried.
+                    </p>
+                  )}
+                  {emailStatus[m.id].skippedInvalid > 0 && (
+                    <p className="text-[12.5px] text-neutral-500 mt-2">
+                      {emailStatus[m.id].skippedInvalid.toLocaleString()} recipient(s) skipped because they have no valid email address.
+                    </p>
+                  )}
+                  {emailStatus[m.id].configError > 0 && (
+                    <p className="text-[12.5px] text-danger-600 mt-2">
+                      {emailStatus[m.id].configError.toLocaleString()} recipient(s) were not emailed because the email
+                      provider is not configured.
+                    </p>
+                  )}
+                  <p className="text-[12px] text-neutral-500 mt-2">
+                    &ldquo;Submitted&rdquo; means the provider accepted the email; only &ldquo;Delivered&rdquo; is confirmed by a
+                    provider delivery event. High-priority recipients are emailed; normal messages are delivered in-app only.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-[13.5px] text-neutral-500">Loading delivery status…</p>
+              )}
+            </div>
+          )}
+
           <div className="mt-6 border-t border-neutral-200/70 pt-4 max-w-[760px]">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-[15px] font-semibold text-neutral-900">Clarifications</h3>
@@ -1323,7 +1544,7 @@ export default function MessagesPage() {
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {selectedIds.map((id) => {
                     const u = recipientResults.find((r) => r.id === id);
-                    const label = u ? u.name : `#${id}`;
+                    const label = u ? u.name : recipientNames[id] || `#${id}`;
                     return (
                       <span key={id} className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 border border-primary-100 rounded-full pl-2.5 pr-1.5 py-1 text-[12.5px] font-medium">
                         {label}
@@ -1360,12 +1581,37 @@ export default function MessagesPage() {
             value={form.content}
             onChange={(e) => setForm({ ...form, content: e.target.value })}
           />
-          <Select
-            label="Message Type"
-            options={MESSAGE_TYPE_OPTIONS}
-            value={form.messageType}
-            onChange={(e) => setForm({ ...form, messageType: e.target.value })}
-          />
+          {(role === 'PO' || role === 'PC') && (
+            <>
+              <Select
+                label="Importance"
+                required
+                options={IMPORTANCE_OPTIONS}
+                value={form.importance}
+                onChange={(e) => setForm({ ...form, importance: e.target.value })}
+              />
+              {form.importance === 'HIGH' && (
+                <div>
+                  <div className="flex items-start gap-2 text-[13.5px] text-warning-700 bg-warning-50 border border-warning-200/70 rounded-[10px] px-3.5 py-2.5">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>
+                      High-priority messages are also sent by email to every recipient with a valid email
+                      address, in addition to the in-app message.
+                    </span>
+                  </div>
+                  {form.audience === 'EVERYONE' && (
+                    <p className="text-[12.5px] text-neutral-500 mt-1.5">
+                      {emailCountLoading
+                        ? 'Counting recipients…'
+                        : emailCount != null
+                          ? `This will email ${emailCount.toLocaleString()} recipient${emailCount === 1 ? '' : 's'} across all departments.`
+                          : 'Recipient count is resolving…'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
           {activeAudience && !activeAudience.specific && (
             <p className="text-[13.5px] text-neutral-500 leading-relaxed">{activeAudience.hint}</p>
           )}
@@ -1390,6 +1636,17 @@ export default function MessagesPage() {
             <p className="text-[13px] text-neutral-500">
               Recipient count is exact: {selectedIds.length} person{selectedIds.length === 1 ? '' : 's'} will receive this message.
             </p>
+          )}
+          {form.importance === 'HIGH' && (
+            <div className="flex items-start gap-2 text-[14px] text-primary-800 bg-primary-50 border border-primary-200/70 rounded-[10px] px-3.5 py-2.5">
+              <span aria-hidden="true">✉</span>
+              <span>
+                High-priority: each recipient with a valid email address will also receive this by email.
+                {form.audience === 'EVERYONE' && emailCount != null
+                  ? ` This will email ${emailCount.toLocaleString()} recipient${emailCount === 1 ? '' : 's'}.`
+                  : ''}
+              </span>
+            </div>
           )}
         </div>
       )}
@@ -1470,7 +1727,7 @@ export default function MessagesPage() {
       </Modal>
     );
 
-  const showCompose = role !== 'STUDENT';
+  const showCompose = audiences.length > 0;
 
   return (
     <PageContainer>

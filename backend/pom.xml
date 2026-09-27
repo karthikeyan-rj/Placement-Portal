@@ -55,6 +55,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway: schema migrations own DDL; Hibernate only validates it -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <!-- MongoDB (Phase 6F.1 foundation only; live messaging stays on PostgreSQL) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

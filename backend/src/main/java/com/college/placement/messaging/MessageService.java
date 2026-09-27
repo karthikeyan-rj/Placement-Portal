@@ -1,18 +1,22 @@
 package com.college.placement.messaging;
 
 import com.college.placement.audit.AuditService;
+import com.college.placement.common.enums.MessageImportance;
 import com.college.placement.common.enums.MessageReactionType;
 import com.college.placement.common.enums.MessageType;
 import com.college.placement.common.enums.Role;
 import com.college.placement.common.exception.BadRequestException;
 import com.college.placement.common.exception.ForbiddenException;
 import com.college.placement.common.exception.ResourceNotFoundException;
+import com.college.placement.contact.ContactRequestService;
 import com.college.placement.messaging.dto.CreateMessageRequest;
+import com.college.placement.messaging.dto.EmailStatusResponse;
 import com.college.placement.messaging.dto.MessageReactionRequest;
 import com.college.placement.messaging.dto.MessageNotification;
 import com.college.placement.messaging.dto.MessageResponse;
 import com.college.placement.messaging.dto.MyReactionResponse;
 import com.college.placement.messaging.dto.UnreadCountResponse;
+import com.college.placement.messaging.email.EmailNotificationService;
 import com.college.placement.messaging.store.MessagingStore;
 import com.college.placement.messaging.store.MessagingStore.ClarificationSummaryRow;
 import com.college.placement.messaging.store.MessagingStore.MessageStatsRow;
@@ -34,6 +38,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,21 +51,24 @@ public class MessageService {
     private final AuditService auditService;
     private final SecurityUtils securityUtils;
     private final MessageNotificationService notificationService;
+    private final EmailNotificationService emailNotificationService;
+    private final ContactRequestService contactRequestService;
 
     public MessageResponse sendMessage(CreateMessageRequest request) {
         User sender = securityUtils.getCurrentUser();
         Role senderRole = sender.getRole();
 
+        MessageImportance importance = resolveImportance(request.getImportance(), senderRole);
         List<User> recipients = resolveRecipients(request, sender);
         if (recipients.isEmpty()) {
             throw new BadRequestException("No valid recipients found for this message.");
         }
 
         StoredMessage created = store.createMessage(sender, request.getTitle(), request.getContent(),
-                resolveMessageType(request.getMessageType(), senderRole), recipients, LocalDateTime.now());
+                deriveMessageType(request), importance, recipients, LocalDateTime.now());
 
         auditService.log("SEND_MESSAGE", "Message", created.messageId(),
-                "To " + recipients.size() + " recipients");
+                "To " + recipients.size() + " recipients, importance=" + created.importance());
 
         notificationService.publishNewMessage(
                 recipients.stream().map(User::getId).toList(),
@@ -72,9 +80,30 @@ public class MessageService {
                         .createdAt(created.createdAt() != null ? created.createdAt().toString() : null)
                         .build());
 
+        if (importance == MessageImportance.HIGH) {
+            emailNotificationService.enqueueHighPriority(created.messageId(), recipients);
+        }
+
         return toResponse(created, sender.getName(),
                 loadStats(store.messageStats(List.of(created.messageId()))),
                 Map.of(), Map.of(), Map.of());
+    }
+
+    public long countRecipients(CreateMessageRequest request) {
+        User sender = securityUtils.getCurrentUser();
+        return resolveRecipients(request, sender).size();
+    }
+
+    public EmailStatusResponse getEmailStatus(Long messageId) {
+        User currentUser = securityUtils.getCurrentUser();
+        StoredMessage message = store.getMessage(messageId);
+        if (message == null) {
+            throw new ResourceNotFoundException("Message", messageId);
+        }
+        if (!message.senderUserId().equals(currentUser.getId())) {
+            throw new ForbiddenException("Only the sender can view email notification status.");
+        }
+        return emailNotificationService.statusSummary(messageId);
     }
 
     public Page<MessageResponse> getSentMessages(Pageable pageable) {
@@ -161,9 +190,28 @@ public class MessageService {
     private List<User> resolveRecipients(CreateMessageRequest request, User sender) {
         Role senderRole = sender.getRole();
 
+        if (Boolean.TRUE.equals(request.getEveryone())) {
+            if (senderRole != Role.PO) {
+                throw new ForbiddenException("Only placement officers can send to the Everyone audience.");
+            }
+            Map<Long, User> byId = new LinkedHashMap<>();
+            for (Role role : List.of(Role.STUDENT, Role.PR, Role.PC)) {
+                for (User u : userRepository.findByRole(role)) {
+                    if (!Boolean.TRUE.equals(u.getActive())) {
+                        continue;
+                    }
+                    if (u.getId().equals(sender.getId())) {
+                        continue;
+                    }
+                    byId.putIfAbsent(u.getId(), u);
+                }
+            }
+            return new ArrayList<>(byId.values());
+        }
+
         if (request.getRecipientIds() != null && !request.getRecipientIds().isEmpty()) {
             return userRepository.findAllById(request.getRecipientIds()).stream()
-                    .filter(u -> u.getActive() && validateRecipientPermission(senderRole, sender, u))
+                    .filter(u -> u.getActive() && isDirectRecipientPermitted(sender, u))
                     .toList();
         }
 
@@ -200,6 +248,28 @@ public class MessageService {
         return new ArrayList<>();
     }
 
+    /**
+     * Authorization for an explicitly addressed direct message. The existing
+     * role/department rules stay the first source of truth; only when they deny
+     * the pair do we consult the single centralized contact-request exception,
+     * which grants access for one exact requester/PC pair that reached
+     * ACCEPTED or RESOLVED. Audience sends (department, role, everyone) keep
+     * using {@link #validateRecipientPermission} alone so the exception can
+     * never widen a broadcast.
+     */
+    private boolean isDirectRecipientPermitted(User sender, User recipient) {
+        if (validateRecipientPermission(sender.getRole(), sender, recipient)) {
+            return true;
+        }
+        // The contact-request exception is scoped to a coordinator pair. PO is
+        // excluded here as well as in the permission query itself, so a legacy
+        // or malformed row can never unlock a placement officer.
+        if (sender.getRole() == Role.PO || recipient.getRole() == Role.PO) {
+            return false;
+        }
+        return contactRequestService.hasDirectMessagingPermission(sender.getId(), recipient.getId());
+    }
+
     private boolean validateRecipientPermission(Role senderRole, User sender, User recipient) {
         return switch (senderRole) {
             case PO -> true;
@@ -221,11 +291,37 @@ public class MessageService {
         };
     }
 
-    private MessageType resolveMessageType(String type, Role role) {
-        if (type != null) {
-            try { return MessageType.valueOf(type.toUpperCase()); } catch (IllegalArgumentException e) {}
+    private MessageType deriveMessageType(CreateMessageRequest request) {
+        if (Boolean.TRUE.equals(request.getEveryone())) {
+            return MessageType.BROADCAST;
+        }
+        if (request.getRecipientIds() != null && !request.getRecipientIds().isEmpty()) {
+            return MessageType.DIRECT;
+        }
+        if (request.getDepartmentId() != null) {
+            return MessageType.DEPARTMENT;
+        }
+        if (request.getTargetRole() != null) {
+            return MessageType.BROADCAST;
         }
         return MessageType.DIRECT;
+    }
+
+    private MessageImportance resolveImportance(String importance, Role senderRole) {
+        if (importance == null || importance.isBlank()) {
+            return MessageImportance.NORMAL;
+        }
+        MessageImportance value;
+        try {
+            value = MessageImportance.valueOf(importance.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid importance: " + importance);
+        }
+        if (value == MessageImportance.HIGH && senderRole != Role.PO && senderRole != Role.PC) {
+            throw new ForbiddenException(
+                    "Only placement officers and placement coordinators can send high-priority messages.");
+        }
+        return value;
     }
 
     private Page<MessageResponse> buildResponses(StoredPage<StoredMessage> page, Pageable pageable, Long recipientUserId) {
@@ -311,6 +407,7 @@ public class MessageService {
                 .title(message.title())
                 .content(message.content())
                 .messageType(message.messageType())
+                .importance(message.importance())
                 .createdAt(message.createdAt() != null ? message.createdAt().toString() : null)
                 .totalRecipients((int) s.total)
                 .deliveredCount((int) s.delivered)

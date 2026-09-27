@@ -41,7 +41,33 @@ export interface ProfileResponse {
   active: boolean;
   departmentId: number | null;
   departmentName: string | null;
+  /** Populated for STUDENT and PR only; always null for PC and PO. */
   studentProfile: StudentProfile | null;
+  /**
+   * Populated for PC and PO only; always null for STUDENT and PR. All-null when
+   * the staff member has not saved anything yet.
+   */
+  staffProfile: StaffProfile | null;
+}
+
+/** Editable professional profile owned by PC and PO accounts. */
+export interface StaffProfile {
+  phone: string | null;
+  designation: string | null;
+  officeLocation: string | null;
+  bio: string | null;
+  linkedinUrl: string | null;
+  expertise: string[] | null;
+}
+
+/** Self-service update payload. Every field is optional and independently editable. */
+export interface UpdateStaffProfileRequest {
+  phone?: string;
+  designation?: string;
+  officeLocation?: string;
+  bio?: string;
+  linkedinUrl?: string;
+  expertise?: string[];
 }
 
 export interface RegisterResponse {
@@ -152,6 +178,7 @@ export interface Message {
   title: string;
   content: string;
   messageType: string | null;
+  importance?: 'NORMAL' | 'HIGH' | string;
   createdAt: string;
   totalRecipients: number;
   deliveredCount: number;
@@ -195,9 +222,48 @@ export interface ClarificationCounts {
   answered: number;
 }
 
+export interface EmailStatusResponse {
+  pending: number;
+  /** Provider accepted the message; not proof of inbox delivery. */
+  submitted: number;
+  /** Confirmed by a provider delivery event. */
+  delivered: number;
+  delayed: number;
+  bounced: number;
+  complained: number;
+  /** Provider suppressed the message; delivery will not be retried. */
+  suppressed: number;
+  failed: number;
+  skippedInvalid: number;
+  configError: number;
+  total: number;
+}
+
+/** Aggregate notification counts for one Placement Drive; no recipient identity. */
+export interface DriveEmailStatus {
+  driveId: number;
+  eventKey: string;
+  eligibleRecipients: number;
+  queued: number;
+  pending: number;
+  submitted: number;
+  delivered: number;
+  delayed: number;
+  bounced: number;
+  complained: number;
+  /** Provider suppressed the message; delivery will not be retried. */
+  suppressed: number;
+  failed: number;
+  skippedInvalid: number;
+  configError: number;
+  total: number;
+}
+
 export interface ContactRequest {
   id: number;
   studentProfileId: number;
+  /** User id of the requester, so a coordinator can address them directly. */
+  requesterUserId: number;
   studentName: string;
   registerNumber: string;
   departmentName: string;
@@ -208,6 +274,29 @@ export interface ContactRequest {
   status: string;
   createdAt: string;
   resolvedAt: string | null;
+}
+
+/** A coordinator the current user may request contact with (server-resolved scope). */
+export interface ContactRequestTarget {
+  id: number;
+  name: string;
+  role: string;
+  departmentName: string | null;
+}
+
+/** Per-status totals for one contact-request view. `rejected` displays as "Declined". */
+export interface ContactRequestCounts {
+  pending: number;
+  accepted: number;
+  rejected: number;
+  resolved: number;
+  total: number;
+}
+
+/** Metadata-only SSE payload for CONTACT_REQUEST_* events. */
+export interface ContactRequestEventInfo {
+  type: string;
+  requestId: number;
 }
 
 export interface StudentInterview {
@@ -338,3 +427,190 @@ export interface ResumeAnalysisSummary {
   readinessScore: number;
   createdAt: string;
 }
+
+// PO Student CSV Import (Phase 7S.1)
+export type ImportRowStatus =
+  | 'READY'
+  | 'DUPLICATE'
+  | 'ALREADY_REGISTERED'
+  | 'ALREADY_AUTHORIZED'
+  | 'INVALID';
+
+export interface ImportRowPreview {
+  rowNumber: number;
+  email: string;
+  name: string;
+  registerNumber: string;
+  department: string;
+  status: ImportRowStatus;
+  error?: string | null;
+}
+
+export interface ImportPreviewResponse {
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  duplicateRows: number;
+  alreadyRegistered: number;
+  alreadyAuthorized: number;
+  rows: ImportRowPreview[];
+}
+
+export interface ImportAccessCodeRow {
+  rowNumber: number;
+  name: string;
+  email: string;
+  registerNumber: string;
+  department: string;
+  accessCode: string;
+}
+
+export interface ImportConfirmResponse {
+  imported: number;
+  skipped: number;
+  alreadyRegistered: number;
+  alreadyAuthorized: number;
+  codes: ImportAccessCodeRow[];
+  errors: ImportRowPreview[];
+}
+
+  // ----- Mock Interview (Phase 7N.2B)
+  // The preparation bank is descriptive only, so `objectiveScoringSupported` is
+  // always false and the UI must never present an aggregate correctness score.
+
+  export type MockInterviewType = 'TECHNICAL' | 'HR_BEHAVIORAL' | 'MIXED';
+  export type MockDifficultyFilter = 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED';
+  export type MockInterviewStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
+  export type MockSelfRating = 'NEED_PRACTICE' | 'PARTIALLY_CONFIDENT' | 'CONFIDENT';
+
+  export interface MockInterviewModuleOption {
+    id: number;
+    code: string;
+    title: string;
+    questionCount: number;
+  }
+
+  export interface MockInterviewModeOption {
+    code: MockInterviewType;
+    label: string;
+    description: string;
+    modules: MockInterviewModuleOption[];
+    /** Active availability per difficulty, plus `MIXED` for the unfiltered total. */
+    availableByDifficulty: Record<string, number>;
+  }
+
+  export interface MockInterviewOptionsResponse {
+    modes: MockInterviewModeOption[];
+    allowedQuestionCounts: number[];
+    maxAnswerLength: number;
+    objectiveScoringSupported: boolean;
+  }
+
+  export interface StartMockInterviewRequest {
+    interviewType: MockInterviewType;
+    difficulty: MockDifficultyFilter;
+    questionCount: number;
+    moduleIds?: number[];
+  }
+
+  export interface MockInterviewQuestionView {
+    sessionQuestionId: number;
+    position: number;
+    questionId: number;
+    question: string;
+    difficulty: string;
+    moduleId: number;
+    moduleCode: string;
+    moduleTitle: string;
+    topicId: number;
+    topicTitle: string;
+    studentAnswer: string | null;
+    selfRating: MockSelfRating | null;
+    answered: boolean;
+    answeredAt: string | null;
+    /** Null until the session is COMPLETED. */
+    referenceAnswer: string | null;
+  }
+
+  export interface MockInterviewSessionResponse {
+    id: number;
+    interviewType: MockInterviewType;
+    interviewTypeLabel: string;
+    difficulty: MockDifficultyFilter;
+    status: MockInterviewStatus;
+    questionCount: number;
+    answeredCount: number;
+    startedAt: string;
+    completedAt: string | null;
+    durationSeconds: number | null;
+    /** Server-derived clock, so a refresh keeps counting from the real start. */
+    elapsedSeconds: number;
+    hasObjectiveQuestions: boolean;
+    questions: MockInterviewQuestionView[];
+  }
+
+  export interface MockInterviewSummaryResponse {
+    id: number;
+    interviewType: MockInterviewType;
+    interviewTypeLabel: string;
+    difficulty: MockDifficultyFilter;
+    status: MockInterviewStatus;
+    questionCount: number;
+    answeredCount: number;
+    startedAt: string;
+    completedAt: string | null;
+    durationSeconds: number | null;
+  }
+
+  export interface MockInterviewModuleBreakdown {
+    moduleId: number;
+    moduleCode: string;
+    moduleTitle: string;
+    questionCount: number;
+    answeredCount: number;
+  }
+
+  export interface MockInterviewTopicBreakdown {
+    topicId: number;
+    topicCode: string;
+    topicTitle: string;
+    moduleCode: string;
+    questionCount: number;
+    answeredCount: number;
+    needPracticeCount: number;
+  }
+
+  export interface MockInterviewSelfAssessmentSummary {
+    confident: number;
+    partiallyConfident: number;
+    needPractice: number;
+    unrated: number;
+    ratedCount: number;
+  }
+
+  export interface MockInterviewReviewArea {
+    moduleCode: string;
+    topicTitle: string;
+    reason: string;
+    needPracticeCount: number;
+    unansweredCount: number;
+  }
+
+  export interface MockInterviewResultResponse {
+    id: number;
+    interviewType: MockInterviewType;
+    interviewTypeLabel: string;
+    difficulty: MockDifficultyFilter;
+    status: MockInterviewStatus;
+    questionCount: number;
+    answeredCount: number;
+    unansweredCount: number;
+    startedAt: string;
+    completedAt: string | null;
+    durationSeconds: number | null;
+    objectiveScoringSupported: boolean;
+    moduleBreakdown: MockInterviewModuleBreakdown[];
+    topicBreakdown: MockInterviewTopicBreakdown[];
+    selfAssessment: MockInterviewSelfAssessmentSummary;
+    areasToReview: MockInterviewReviewArea[];
+  }

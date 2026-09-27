@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { companyApi, placementDriveApi, departmentApi } from '../../api/api';
-import type { PlacementDrive, CompanyOption, Department } from '../../types';
+import type { PlacementDrive, CompanyOption, Department, DriveEmailStatus } from '../../types';
 import { getErrorMessage } from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -155,6 +155,7 @@ export default function DrivesPage() {
   const [createError, setCreateError] = useState('');
 
   const [viewDrive, setViewDrive] = useState<PlacementDrive | null>(null);
+  const [driveEmailStatus, setDriveEmailStatus] = useState<DriveEmailStatus | null>(null);
 
   const [eligDrive, setEligDrive] = useState<PlacementDrive | null>(null);
   const [eligForm, setEligForm] = useState<EligibilityForm>(emptyEligibilityForm(null));
@@ -164,8 +165,9 @@ export default function DrivesPage() {
 
   const [confirm, setConfirm] = useState<{
     drive: PlacementDrive;
-    action: 'close' | 'cancel';
+    action: 'close' | 'cancel' | 'open';
   } | null>(null);
+  const [openPreview, setOpenPreview] = useState<{ count: number | null; loading: boolean } | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
 
   const fetchDrives = useCallback(async () => {
@@ -179,6 +181,25 @@ export default function DrivesPage() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!viewDrive || !isPO || viewDrive.status !== 'REGISTRATION_OPEN') {
+      setDriveEmailStatus(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await placementDriveApi.getEmailStatus(viewDrive.id);
+        if (!cancelled) setDriveEmailStatus(res.data?.data ?? null);
+      } catch {
+        if (!cancelled) setDriveEmailStatus(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewDrive, isPO]);
 
   useEffect(() => {
     fetchDrives();
@@ -343,33 +364,43 @@ export default function DrivesPage() {
     }
   };
 
-  const runStatus = async (driveId: number, status: string) => {
-    setActionSaving(true);
+  const promptOpenRegistration = async (d: PlacementDrive) => {
+    setConfirm({ drive: d, action: 'open' });
+    setOpenPreview({ count: null, loading: true });
     try {
-      await placementDriveApi.setStatus(driveId, status);
-      notify.success('Drive status updated');
-      fetchDrives();
+      const res = await placementDriveApi.getEmailRecipientCount(d.id);
+      setOpenPreview({ count: res.data?.data ?? null, loading: false });
     } catch {
-      notify.error('Failed to update drive status');
-    } finally {
-      setActionSaving(false);
+      setOpenPreview({ count: null, loading: false });
     }
   };
 
   const runConfirmedStatus = async () => {
     if (!confirm) return;
+    const isOpen = confirm.action === 'open';
     setActionSaving(true);
     try {
       await placementDriveApi.setStatus(
         confirm.drive.id,
-        confirm.action === 'close' ? 'REGISTRATION_CLOSED' : 'CANCELLED'
-      );
-      notify.success(
         confirm.action === 'close'
-          ? 'Registration closed'
-          : `${confirm.drive.companyName} drive cancelled`
+          ? 'REGISTRATION_CLOSED'
+          : isOpen
+            ? 'REGISTRATION_OPEN'
+            : 'CANCELLED'
       );
+      if (isOpen) {
+        notify.success(
+          'Registration opened. Email notifications are being sent to eligible students.'
+        );
+      } else {
+        notify.success(
+          confirm.action === 'close'
+            ? 'Registration closed'
+            : `${confirm.drive.companyName} drive cancelled`
+        );
+      }
       setConfirm(null);
+      setOpenPreview(null);
       fetchDrives();
     } catch {
       notify.error('Failed to update drive status');
@@ -392,7 +423,7 @@ export default function DrivesPage() {
         items.push({
           label: 'Open Registration',
           icon: <LogIn size={15} />,
-          onClick: () => runStatus(d.id, 'REGISTRATION_OPEN'),
+          onClick: () => promptOpenRegistration(d),
         });
       }
       if (d.status === 'REGISTRATION_OPEN') {
@@ -868,6 +899,71 @@ export default function DrivesPage() {
             )}
           </div>
         )}
+        {isPO && viewDrive?.status === 'REGISTRATION_OPEN' && (
+          <div className="mt-5 border-t border-neutral-200/70 pt-4">
+            <h3 className="text-[15px] font-semibold text-neutral-900">Student email notifications</h3>
+            {driveEmailStatus ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                  <div className="rounded-[12px] bg-neutral-50 border border-neutral-200/70 px-3 py-2.5">
+                    <p className="text-[18px] font-bold text-success-600 tabular-nums">
+                      {driveEmailStatus.delivered.toLocaleString()}
+                    </p>
+                    <p className="text-[12px] text-neutral-500 -mt-0.5">Delivered</p>
+                  </div>
+                  <div className="rounded-[12px] bg-neutral-50 border border-neutral-200/70 px-3 py-2.5">
+                    <p className="text-[18px] font-bold text-neutral-700 tabular-nums">
+                      {driveEmailStatus.submitted.toLocaleString()}
+                    </p>
+                    <p className="text-[12px] text-neutral-500 -mt-0.5">Submitted</p>
+                  </div>
+                  <div className="rounded-[12px] bg-neutral-50 border border-neutral-200/70 px-3 py-2.5">
+                    <p className="text-[18px] font-bold text-neutral-700 tabular-nums">
+                      {driveEmailStatus.pending.toLocaleString()}
+                    </p>
+                    <p className="text-[12px] text-neutral-500 -mt-0.5">Pending</p>
+                  </div>
+                  <div className="rounded-[12px] bg-neutral-50 border border-neutral-200/70 px-3 py-2.5">
+                    <p className="text-[18px] font-bold text-warning-600 tabular-nums">
+                      {driveEmailStatus.failed.toLocaleString()}
+                    </p>
+                    <p className="text-[12px] text-neutral-500 -mt-0.5">Failed</p>
+                  </div>
+                </div>
+                {driveEmailStatus.skippedInvalid > 0 && (
+                  <p className="text-[12.5px] text-neutral-500 mt-2">
+                    {driveEmailStatus.skippedInvalid.toLocaleString()} eligible student(s) were skipped
+                    because they have no valid email address.
+                  </p>
+                )}
+                {driveEmailStatus.configError > 0 && (
+                  <p className="text-[12.5px] text-danger-600 mt-2">
+                    {driveEmailStatus.configError.toLocaleString()} student(s) were not emailed because the
+                    email provider is not configured.
+                  </p>
+                )}
+                {(driveEmailStatus.bounced > 0 || driveEmailStatus.complained > 0) && (
+                  <p className="text-[12.5px] text-warning-600 mt-2">
+                    {driveEmailStatus.bounced.toLocaleString()} bounced,{' '}
+                    {driveEmailStatus.complained.toLocaleString()} marked as spam.
+                  </p>
+                )}
+                {driveEmailStatus.suppressed > 0 && (
+                  <p className="text-[12.5px] text-warning-600 mt-2">
+                    {driveEmailStatus.suppressed.toLocaleString()} suppressed by the email provider
+                    and will not be retried.
+                  </p>
+                )}
+                <p className="text-[12px] text-neutral-500 mt-2">
+                  Counts only, no student addresses. &ldquo;Submitted&rdquo; means the provider
+                  accepted the email; &ldquo;Delivered&rdquo; is confirmed by a provider delivery event.
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-[13.5px] text-neutral-500">Loading notification status…</p>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* ── Set Eligibility ── */}
@@ -1025,17 +1121,38 @@ export default function DrivesPage() {
       {/* ── Status Confirmations ── */}
       <ConfirmDialog
         isOpen={!!confirm}
-        onClose={() => setConfirm(null)}
+        onClose={() => {
+          setConfirm(null);
+          setOpenPreview(null);
+        }}
         onConfirm={runConfirmedStatus}
-        title={confirm?.action === 'close' ? 'Close Registration' : 'Cancel Drive'}
+        title={
+          confirm?.action === 'open'
+            ? 'Open Registration'
+            : confirm?.action === 'close'
+              ? 'Close Registration'
+              : 'Cancel Drive'
+        }
         message={
           confirm
-            ? confirm.action === 'close'
-              ? `Stop accepting registrations for the "${confirm.drive.companyName}" drive?`
-              : `Cancel the "${confirm.drive.companyName}" drive? This will mark it as cancelled for students.`
+            ? confirm.action === 'open'
+              ? openPreview?.loading
+                ? 'Counting eligible students…'
+                : openPreview?.count === 0
+                  ? 'No students currently match this drive\'s eligibility criteria, so opening registration will not email anyone.'
+                  : `${(openPreview?.count ?? 0).toLocaleString()} eligible student(s) will be emailed about the "${confirm.drive.jobRole}" drive at ${confirm.drive.companyName}.`
+              : confirm.action === 'close'
+                ? `Stop accepting registrations for the "${confirm.drive.companyName}" drive?`
+                : `Cancel the "${confirm.drive.companyName}" drive? This will mark it as cancelled for students.`
             : ''
         }
-        confirmLabel={confirm?.action === 'cancel' ? 'Cancel Drive' : 'Close Registration'}
+        confirmLabel={
+          confirm?.action === 'cancel'
+            ? 'Cancel Drive'
+            : confirm?.action === 'open'
+              ? 'Open & Notify Students'
+              : 'Close Registration'
+        }
         variant={confirm?.action === 'cancel' ? 'danger' : 'primary'}
         loading={actionSaving}
       />

@@ -3,7 +3,11 @@ package com.college.placement.placement;
 import com.college.placement.common.enums.PlacementDriveStatus;
 import com.college.placement.common.dto.ApiResponse;
 import com.college.placement.common.dto.PaginatedResponse;
+import com.college.placement.common.enums.Role;
+import com.college.placement.messaging.dto.DriveEmailStatusResponse;
+import com.college.placement.messaging.email.DriveEmailNotificationService;
 import com.college.placement.placement.dto.*;
+import com.college.placement.security.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,6 +22,8 @@ import org.springframework.web.bind.annotation.*;
 public class PlacementDriveController {
 
     private final PlacementDriveService driveService;
+    private final DriveEmailNotificationService driveEmailNotificationService;
+    private final SecurityUtils securityUtils;
 
     @GetMapping
     public ResponseEntity<ApiResponse<PaginatedResponse<PlacementDriveResponse>>> getAllDrives(
@@ -73,5 +79,21 @@ public class PlacementDriveController {
             @PathVariable Long driveId,
             @PathVariable Long studentId) {
         return ResponseEntity.ok(ApiResponse.success(driveService.checkEligibility(driveId, studentId)));
+    }
+
+    /** Aggregate notification counts for a drive; safe for PO-only display. */
+    @GetMapping("/{id}/email-status")
+    public ResponseEntity<ApiResponse<DriveEmailStatusResponse>> getEmailStatus(@PathVariable Long id) {
+        securityUtils.requireRole(Role.PO);
+        return ResponseEntity.ok(ApiResponse.success(
+                driveEmailNotificationService.statusSummary(id, DriveEmailNotificationService.EVENT_REGISTRATION_OPEN)));
+    }
+
+    /** How many students would be notified if registration opened now. Count only, no addresses. */
+    @GetMapping("/{id}/email-recipient-count")
+    public ResponseEntity<ApiResponse<Long>> getEmailRecipientCount(@PathVariable Long id) {
+        securityUtils.requireRole(Role.PO);
+        driveService.getDriveById(id);
+        return ResponseEntity.ok(ApiResponse.success(driveEmailNotificationService.eligibleRecipientCount(id)));
     }
 }

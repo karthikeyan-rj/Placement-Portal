@@ -12,6 +12,13 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
 
+  # This profile is an ephemeral in-memory H2 scratch database that Hibernate
+  # builds from scratch on every run (create-drop). Flyway's baseline DDL is
+  # PostgreSQL-specific and there is no data worth baselining, so migrations are
+  # disabled here. Real PostgreSQL environments (local, test, prod) use Flyway.
+  flyway:
+    enabled: false
+
   h2:
     console:
       enabled: true

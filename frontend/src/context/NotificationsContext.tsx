@@ -16,9 +16,41 @@ export interface MessageEventInfo {
   messageId: number | null;
 }
 
+/**
+ * A revalidation-only signal for the shared clarification section. It carries no
+ * clarification content: the consumer re-reads the authoritative thread data
+ * through the normal (already authorized) clarification endpoints.
+ */
+export interface ClarificationEventInfo {
+  at: number;
+  type: string;
+  messageId: number | null;
+  threadId: number | null;
+}
+
+/**
+ * A revalidation-only signal for the contact-request workflow. It carries just
+ * the event type and the request id: no subject, body or profile detail is
+ * broadcast, and the consumer re-reads the list it is already authorized for.
+ */
+export interface ContactRequestEventInfo {
+  at: number;
+  type: string;
+  requestId: number | null;
+}
+
+const CONTACT_REQUEST_EVENTS = [
+  'CONTACT_REQUEST_CREATED',
+  'CONTACT_REQUEST_ACCEPTED',
+  'CONTACT_REQUEST_REJECTED',
+  'CONTACT_REQUEST_RESOLVED',
+] as const;
+
 interface NotificationsContextType {
   unreadCount: number;
   lastEvent: MessageEventInfo | null;
+  clarificationSignal: ClarificationEventInfo | null;
+  contactRequestSignal: ContactRequestEventInfo | null;
   markRead: (messageId: number) => void;
   refreshUnread: () => Promise<void>;
 }
@@ -34,6 +66,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const [unreadCount, setUnreadCount] = useState(0);
   const [lastEvent, setLastEvent] = useState<MessageEventInfo | null>(null);
+  const [clarificationSignal, setClarificationSignal] = useState<ClarificationEventInfo | null>(null);
+  const [contactRequestSignal, setContactRequestSignal] = useState<ContactRequestEventInfo | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshUnread = useCallback(async () => {
@@ -53,6 +87,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     if (!enabled) {
       setUnreadCount(0);
       setLastEvent(null);
+      setClarificationSignal(null);
+      setContactRequestSignal(null);
       return;
     }
 
@@ -81,6 +117,31 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           void refreshUnread();
         },
         onEvent: (name, data) => {
+          // Contact-request lifecycle events are also pure revalidation signals.
+          // A pending request is not a message, so these must never move
+          // unreadCount, the red unread dot, or message read state.
+          if ((CONTACT_REQUEST_EVENTS as readonly string[]).includes(name)) {
+            const payload = data as { requestId?: number } | null;
+            setContactRequestSignal({
+              at: Date.now(),
+              type: name,
+              requestId: typeof payload?.requestId === 'number' ? payload.requestId : null,
+            });
+            return;
+          }
+          // Clarification events are pure revalidation signals. They must NEVER
+          // touch unreadCount, the red unread dot, or the message list read state:
+          // that state stays exclusively driven by NEW_MESSAGE.
+          if (name === 'CLARIFICATION_CREATED' || name === 'CLARIFICATION_REPLIED' || name === 'CLARIFICATION_FOLLOWUP') {
+            const payload = data as { messageId?: number; threadId?: number } | null;
+            setClarificationSignal({
+              at: Date.now(),
+              type: name,
+              messageId: typeof payload?.messageId === 'number' ? payload.messageId : null,
+              threadId: typeof payload?.threadId === 'number' ? payload.threadId : null,
+            });
+            return;
+          }
           if (name !== 'NEW_MESSAGE') return;
           // Never blindly increment: a replayed/duplicated event (or a reconnect
           // that redelivers) would inflate the badge. Guarantee the dot shows
@@ -151,7 +212,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <NotificationsContext.Provider value={{ unreadCount, lastEvent, markRead, refreshUnread }}>
+    <NotificationsContext.Provider value={{ unreadCount, lastEvent, clarificationSignal, contactRequestSignal, markRead, refreshUnread }}>
       {children}
     </NotificationsContext.Provider>
   );

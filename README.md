@@ -38,6 +38,7 @@ A full-stack college placement management and communication system built with **
 - PostgreSQL
 - MongoDB (messaging store)
 - Supabase
+- Schema migrations managed by **Flyway** (PostgreSQL). See [docs/database-migrations.md](docs/database-migrations.md) — Flyway owns the schema, Hibernate runs `ddl-auto=validate`.
 
 ## Architecture
 

@@ -123,7 +123,7 @@ export const NAV_GROUPS: Record<Role, NavGroup[]> = {
       items: [
         { label: 'Interview Prep', path: '/preparation', icon: BookOpen, enabled: false },
         { label: 'Resume Analyzer', path: '/resume-analyzer', icon: FileText },
-        { label: 'Mock Interview', path: '/mock-interview', icon: Mic, enabled: false },
+        { label: 'Mock Interview', path: '/mock-interview', icon: Mic },
         { label: 'Skill Roadmap', path: '/skill-roadmap', icon: Map, enabled: false },
       ],
     },
@@ -165,7 +165,7 @@ export const NAV_GROUPS: Record<Role, NavGroup[]> = {
       items: [
         { label: 'Interview Prep', path: '/preparation', icon: BookOpen, enabled: false },
         { label: 'Resume Analyzer', path: '/resume-analyzer', icon: FileText },
-        { label: 'Mock Interview', path: '/mock-interview', icon: Mic, enabled: false },
+        { label: 'Mock Interview', path: '/mock-interview', icon: Mic },
         { label: 'Skill Roadmap', path: '/skill-roadmap', icon: Map, enabled: false },
       ],
     },

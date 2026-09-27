@@ -34,9 +34,6 @@ public class AuthService {
     /** Number of trailing numeric digits used to match short-form register numbers. */
     private static final int REGISTER_NUMBER_TAIL = 5;
 
-    private static final String TCE_DOMAIN = "tce.edu";
-    private static final String TCE_DOMAIN_SUFFIX = ".tce.edu";
-
     private final UserRepository userRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final StudentAccessCodeRepository accessCodeRepository;
@@ -54,7 +51,7 @@ public class AuthService {
 
         // 1. Only TCE email domains are allowed: name@tce.edu or name@<sub>.tce.edu.
         //    Anything like name@tce.edu.fake.com is rejected.
-        if (!isAllowedTceEmail(email)) {
+        if (!com.college.placement.common.validation.TceEmailValidator.isAllowedTceEmail(email)) {
             throw new BadRequestException("This email is not authorized for registration.");
         }
         if (userRepository.existsByEmail(email)) {
@@ -160,21 +157,6 @@ public class AuthService {
         userRepository.save(user);
 
         auditService.log("CHANGE_PASSWORD", "User", user.getId(), user.getEmail());
-    }
-
-    /**
-     * Accepts the TCE email domain and any of its subdomains, e.g.
-     * name@tce.edu, name@student.tce.edu, name@staff.tce.edu.
-     * Rejects lookalike domains such as name@tce.edu.fake.com.
-     */
-    private static boolean isAllowedTceEmail(String email) {
-        if (email == null) return false;
-        int at = email.lastIndexOf('@');
-        if (at <= 0 || at == email.length() - 1) return false;
-        String local = email.substring(0, at);
-        if (local.trim().isEmpty()) return false;
-        String domain = email.substring(at + 1).toLowerCase();
-        return TCE_DOMAIN.equals(domain) || domain.endsWith(TCE_DOMAIN_SUFFIX);
     }
 
     /**

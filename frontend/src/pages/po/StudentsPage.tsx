@@ -20,8 +20,9 @@ import {
 import { getErrorMessage } from '../../api/axios';
 import { useSearchParams } from 'react-router-dom';
 import { useEffectiveRole } from '../../hooks/useEffectiveRole';
-import { Users, UserPlus, MoreVertical, Pencil } from 'lucide-react';
+import { Users, UserPlus, MoreVertical, Pencil, UploadCloud } from 'lucide-react';
 import toast from 'react-hot-toast';
+import StudentImportModal from './StudentImportModal';
 
 const STATUS_OPTIONS = [
   { label: 'Placed', value: 'PLACED' },
@@ -80,6 +81,7 @@ export default function StudentsPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     registerNumber: '',
@@ -301,9 +303,20 @@ export default function StudentsPage() {
         title="Students"
         description="Manage student profiles, academics and placement information."
         actions={
-          <Button onClick={() => setAddModalOpen(true)} className="flex items-center gap-1.5">
-            <UserPlus size={16} /> Add Student
-          </Button>
+          <div className="flex items-center gap-2.5">
+            {effectiveRole === 'PO' && (
+              <Button
+                onClick={() => setImportOpen(true)}
+                variant="secondary"
+                className="flex items-center gap-1.5"
+              >
+                <UploadCloud size={16} /> Import Students
+              </Button>
+            )}
+            <Button onClick={() => setAddModalOpen(true)} className="flex items-center gap-1.5">
+              <UserPlus size={16} /> Add Student
+            </Button>
+          </div>
         }
       />
 
@@ -535,6 +548,12 @@ export default function StudentsPage() {
             />
           </form>
         </Modal>
+
+        <StudentImportModal
+          isOpen={importOpen}
+          onClose={() => setImportOpen(false)}
+          onImported={fetchStudents}
+        />
 
         {/* Edit Student Modal */}
         <Modal

@@ -41,6 +41,8 @@ public class MongoMessage {
 
     private String messageType;
 
+    private String importance;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

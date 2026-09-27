@@ -7,7 +7,9 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      # Flyway owns the schema. Hibernate only validates it, so a missing
+      # migration fails at startup instead of being silently patched here.
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect

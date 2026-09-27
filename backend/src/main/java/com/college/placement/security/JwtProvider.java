@@ -62,4 +62,18 @@ public class JwtProvider {
             return false;
         }
     }
+
+    public boolean isLoginToken(String token) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            Object purpose = claims.get("purpose");
+            return purpose == null || "AUTH".equals(purpose);
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
 }

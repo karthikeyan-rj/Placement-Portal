@@ -17,6 +17,7 @@ import com.college.placement.student.StudentAcademicRepository;
 import com.college.placement.student.StudentProfile;
 import com.college.placement.student.StudentProfileRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -42,6 +43,7 @@ public class PlacementDriveService {
     private final StudentAcademicRepository academicRepository;
     private final AuditService auditService;
     private final SecurityUtils securityUtils;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public Page<PlacementDriveResponse> getAllDrives(PlacementDriveStatus status, Pageable pageable) {
@@ -86,12 +88,16 @@ public class PlacementDriveService {
                 .registrationDeadline(request.getRegistrationDeadline() != null ? LocalDate.parse(request.getRegistrationDeadline()) : null)
                 .location(request.getLocation())
                 .jobDescription(request.getJobDescription())
-                .status(PlacementDriveStatus.UPCOMING)
+                .status(request.getStatus() != null ? request.getStatus() : PlacementDriveStatus.UPCOMING)
                 .build();
 
         drive = driveRepository.save(drive);
         auditService.log("CREATE_PLACEMENT_DRIVE", "PlacementDrive", drive.getId(),
                 company.getName() + " - " + drive.getJobRole());
+
+        if (drive.getStatus() == PlacementDriveStatus.REGISTRATION_OPEN) {
+            eventPublisher.publishEvent(new DriveRegistrationOpenedEvent(drive.getId()));
+        }
 
         return toResponse(drive);
     }
@@ -101,12 +107,18 @@ public class PlacementDriveService {
         securityUtils.requireRole(Role.PO);
 
         PlacementDrive drive = findDrive(id);
-        String oldStatus = drive.getStatus().name();
+        PlacementDriveStatus previousStatus = drive.getStatus();
         drive.setStatus(status);
         drive = driveRepository.save(drive);
 
         auditService.log("UPDATE_DRIVE_STATUS", "PlacementDrive", id,
-                oldStatus, status.name());
+                previousStatus.name(), status.name());
+
+        // Only the transition into REGISTRATION_OPEN notifies; repeated saves must not.
+        if (status == PlacementDriveStatus.REGISTRATION_OPEN
+                && previousStatus != PlacementDriveStatus.REGISTRATION_OPEN) {
+            eventPublisher.publishEvent(new DriveRegistrationOpenedEvent(drive.getId()));
+        }
 
         return toResponse(drive);
     }

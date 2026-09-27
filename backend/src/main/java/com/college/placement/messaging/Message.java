@@ -1,5 +1,6 @@
 package com.college.placement.messaging;
 
+import com.college.placement.common.enums.MessageImportance;
 import com.college.placement.common.enums.MessageType;
 import com.college.placement.user.User;
 import jakarta.persistence.*;
@@ -35,6 +36,11 @@ public class Message {
     @Column(name = "message_type", nullable = false)
     @Builder.Default
     private MessageType messageType = MessageType.DIRECT;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "importance", nullable = false, length = 16)
+    @Builder.Default
+    private MessageImportance importance = MessageImportance.NORMAL;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
